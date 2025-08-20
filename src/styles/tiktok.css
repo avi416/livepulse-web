@@ -1,0 +1,10 @@
+/* Small helpers for vertical feed */
+.feedCenter { display: flex; justify-content: center; }
+
+/* ensure video items snap nicely */
+.feedContainer { scroll-snap-type: y mandatory; }
+
+/* action rail overlay for md and below */
+@media (max-width: 768px) {
+  .actionOverlay { position: absolute; right: 12px; bottom: 80px; display:flex; flex-direction:column; gap:12px; }
+}
