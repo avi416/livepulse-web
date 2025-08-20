@@ -1,4 +1,3 @@
-import React from 'react';
 import VerticalFeed from '../components/feed/VerticalFeed';
 
 export default function Home() {

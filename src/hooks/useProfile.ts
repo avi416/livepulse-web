@@ -32,18 +32,21 @@ export function useProfile(handleOrUid?: string): UseProfileResult {
           setError('not-found');
           setUser(null);
         } else {
-          const d = snap.data() as any;
-          const out: User = {
-            uid: d.uid,
-            handle: d.uid,
-            name: d.name || d.displayName || '',
-            avatarUrl: d.avatarUrl,
-            role: d.role || 'user',
-          };
+          const d = snap.data() as Record<string, unknown>;
+            const out: User = {
+              uid: (d.uid as string) || undefined,
+              handle: (d.uid as string) || '',
+              name: (d.name as string) || (d.displayName as string) || '',
+              avatarUrl: (d.avatarUrl as string) || undefined,
+              role: ((d.role as 'user' | 'admin') || 'user'),
+              email: (d.email as string) || undefined,
+              createdAt: (d.createdAt as any) || undefined,
+            };
           setUser(out);
         }
-      } catch (e: any) {
-        setError(e?.message ?? String(e));
+      } catch (err) {
+        const e = err as Error | undefined;
+        setError(e?.message ?? String(err));
         setUser(null);
       } finally {
         if (!cancelled) setLoading(false);

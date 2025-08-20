@@ -1,4 +1,3 @@
-import React from 'react';
 import '../../styles/components/LiveCard.css';
 import type { Live } from '../../types/live';
 import LiveMeta from './LiveMeta';

@@ -1,15 +1,13 @@
-import React, { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { getAuthInstance, getFirestoreInstance, googleProvider } from '../services/firebase';
-import type { Auth } from 'firebase/auth';
-import type { Firestore } from 'firebase/firestore';
 
 export default function Register() {
   const navigate = useNavigate();
-  const auth = getAuthInstance() as Auth;
-  const db = getFirestoreInstance() as Firestore;
+  const auth = getAuthInstance();
+  const db = getFirestoreInstance();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -17,7 +15,7 @@ export default function Register() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);

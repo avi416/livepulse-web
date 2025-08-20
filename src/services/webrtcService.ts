@@ -41,8 +41,8 @@ export async function broadcasterCreateOffer(broadcaster: ReturnType<typeof crea
 
   await setDoc(roomRef, { type: 'offer', sdp: offer.sdp });
 
-  const unsub = onSnapshot(roomRef, async (snap: any) => {
-    const data = snap.data() as any;
+  const unsub = onSnapshot(roomRef, async (snap: { data?: () => unknown } | null) => {
+    const data = snap?.data?.() as Record<string, unknown> | undefined;
     if (!data) return;
     if (data.type === 'answer' && data.sdp) {
       const answer = { type: 'answer', sdp: data.sdp } as RTCSessionDescriptionInit;
@@ -50,11 +50,13 @@ export async function broadcasterCreateOffer(broadcaster: ReturnType<typeof crea
     }
   });
 
-  const unsubIce = onSnapshot(answerCandidatesCol, (snap: any) => {
-    snap.docChanges().forEach((change: any) => {
+  const unsubIce = onSnapshot(answerCandidatesCol, (snap: { docChanges: () => Array<{ type: string; doc: { data: () => unknown } }> }) => {
+    // snap.docChanges() returns an array of change objects with .type and .doc
+    snap.docChanges().forEach((change) => {
       if (change.type === 'added') {
-        const c = change.doc.data() as any;
-        pc.addIceCandidate(new RTCIceCandidate(c));
+        const c = change.doc.data() as Record<string, unknown>;
+        const cand = c as unknown as RTCIceCandidateInit;
+        pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
       }
     });
   });
@@ -83,7 +85,7 @@ export async function watcherJoin(streamId: string, videoEl: HTMLVideoElement, l
   };
 
   const snap = await getDoc(roomRef);
-  const data = snap.data() as any;
+  const data = snap.data() as Record<string, unknown> | undefined;
   if (!data || data.type !== 'offer') throw new Error('Offer not found');
 
   const offerDesc = { type: 'offer', sdp: data.sdp } as RTCSessionDescriptionInit;
@@ -94,11 +96,12 @@ export async function watcherJoin(streamId: string, videoEl: HTMLVideoElement, l
 
   await setDoc(roomRef, { type: 'answer', sdp: answer.sdp });
 
-  const unsubOfferIce = onSnapshot(offerCandidatesCol, (snap2: any) => {
-    snap2.docChanges().forEach((change: any) => {
+  const unsubOfferIce = onSnapshot(offerCandidatesCol, (snap2: { docChanges: () => Array<{ type: string; doc: { data: () => unknown } }> }) => {
+    snap2.docChanges().forEach((change) => {
       if (change.type === 'added') {
-        const c = change.doc.data() as any;
-        pc.addIceCandidate(new RTCIceCandidate(c));
+        const c = change.doc.data() as Record<string, unknown>;
+        const cand = c as unknown as RTCIceCandidateInit;
+        pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
       }
     });
   });

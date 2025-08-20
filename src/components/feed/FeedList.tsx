@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import '../../styles/components/FeedList.css';
 import LiveCard from './LiveCard';
 import type { Live } from '../../types/live';

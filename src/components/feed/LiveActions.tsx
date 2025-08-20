@@ -1,6 +1,6 @@
 import '../../styles/components/LiveActions.css';
 
-type Props = { compact?: boolean };
+type Props = { compact?: boolean; liveId?: string };
 
 export default function LiveActions({ compact }: Props) {
   return (

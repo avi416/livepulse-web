@@ -1,7 +1,7 @@
-import React from 'react';
+import type { ReactNode } from 'react';
 import { Heart, MessageSquare, Share2, Bookmark } from 'lucide-react';
 
-type ActionProps = { icon: React.ReactNode; label: string; count?: number };
+type ActionProps = { icon: ReactNode; label: string; count?: number };
 
 function Action({ icon, label, count }: ActionProps) {
   return (

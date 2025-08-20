@@ -1,4 +1,4 @@
-import React from 'react';
+// React default import not needed with the new JSX transform
 import SearchBar from '../components/common/SearchBar';
 
 const tags = ['music','gaming','chat','cooking','art','fitness','tech','travel'];

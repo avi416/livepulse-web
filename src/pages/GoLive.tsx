@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthUser from '../hooks/useAuthUser';
 import LiveStreamPage from './LiveStream';

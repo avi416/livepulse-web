@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { watcherJoin } from '../services/webrtcService';
 import { useLocalMedia } from '../hooks/useLocalMedia';
@@ -7,7 +7,7 @@ export default function LiveViewer() {
   const { id } = useParams();
   const [error, setError] = useState<string | null>(null);
   const remoteRef = useRef<HTMLVideoElement | null>(null);
-  const { start, stop, stream } = useLocalMedia();
+  const { start, stream } = useLocalMedia();
 
   const join = async (streamId?: string) => {
     const sid = streamId ?? id;

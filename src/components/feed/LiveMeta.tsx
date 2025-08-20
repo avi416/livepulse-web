@@ -1,4 +1,4 @@
-import React from 'react';
+// React default import not required with react-jsx
 import '../../styles/components/LiveMeta.css';
 import type { Live } from '../../types/live';
 

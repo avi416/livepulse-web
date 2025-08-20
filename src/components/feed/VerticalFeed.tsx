@@ -1,4 +1,3 @@
-import React from 'react';
 import FeedList from './FeedList';
 
 export default function VerticalFeed() {

@@ -1,4 +1,4 @@
-import React from 'react';
+// React default import not needed with the new JSX transform
 import FeedList from '../components/feed/FeedList';
 
 export default function Following() {

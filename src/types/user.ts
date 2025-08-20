@@ -4,4 +4,6 @@ export type User = {
   name: string;
   avatarUrl?: string;
   role?: 'user' | 'admin';
+  email?: string;
+  createdAt?: number | { seconds?: number };
 };

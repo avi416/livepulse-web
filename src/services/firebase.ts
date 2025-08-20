@@ -86,7 +86,7 @@ export function debugFirebaseEnv(): void {
   if (!(import.meta.env.DEV)) return;
   try {
     // Only log masked/diagnostic info
-    // eslint-disable-next-line no-console
+     
     console.debug('Firebase env (masked):', {
       apiKey: mask(required.apiKey as string | undefined),
       authDomain: required.authDomain ?? '<missing>',
@@ -94,8 +94,8 @@ export function debugFirebaseEnv(): void {
       storageBucket: required.storageBucket ?? '<missing>',
       appId: required.appId ?? '<missing>',
     });
-  } catch (e) {
-    // noop
+  } catch {
+    // noop - intentionally swallow debug errors
   }
 }
 

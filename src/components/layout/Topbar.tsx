@@ -1,4 +1,4 @@
-import React from 'react';
+// React default import not required with react-jsx
 import SearchBar from '../common/SearchBar';
 import '../../styles/components/Topbar.css';
 import { Link } from 'react-router-dom';

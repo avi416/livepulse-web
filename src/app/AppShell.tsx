@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import '../styles/components/AppShell.css';
 import { Outlet } from 'react-router-dom';
 // removed Topbar per request

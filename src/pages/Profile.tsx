@@ -1,4 +1,4 @@
-import React from 'react';
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useProfile } from '../hooks/useProfile';
 
@@ -8,7 +8,7 @@ export default function Profile() {
   const key = handle || 'me';
   const { user, loading, error } = useProfile(key);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (error === 'not-authenticated') navigate('/login');
   }, [error, navigate]);
 
@@ -16,7 +16,12 @@ export default function Profile() {
   if (error) return <div className="pt-12 p-4 text-center text-red-400">Error: {error}</div>;
   if (!user) return <div className="pt-12 p-4 text-center">Profile not found</div>;
 
-  const created = (user as any).createdAt ? new Date((user as any).createdAt) : undefined;
+  let created: Date | undefined;
+  const createdRaw = (user as unknown as { createdAt?: number | { seconds?: number } | undefined }).createdAt;
+  if (typeof createdRaw === 'number') created = new Date(createdRaw);
+  else if (createdRaw && typeof createdRaw === 'object' && 'seconds' in createdRaw && typeof (createdRaw as any).seconds === 'number') {
+    created = new Date((createdRaw as any).seconds * 1000);
+  } else created = undefined;
 
   return (
     <div className="pt-12 min-h-screen flex items-start justify-center">
@@ -25,7 +30,7 @@ export default function Profile() {
           <div className="w-20 h-20 bg-blue-300 rounded-full flex items-center justify-center text-xl font-bold text-white">{user.name?.charAt(0) ?? '?'}</div>
           <div>
             <div className="text-2xl font-semibold">{user.name}</div>
-            <div className="text-sm text-gray-300">{(user as any).email}</div>
+            <div className="text-sm text-gray-300">{(user as unknown as { email?: string }).email}</div>
           </div>
         </div>
 
