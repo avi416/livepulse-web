@@ -18,19 +18,31 @@ const required = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+const envVarNames: Record<keyof typeof required, string> = {
+  apiKey: 'VITE_FIREBASE_API_KEY',
+  authDomain: 'VITE_FIREBASE_AUTH_DOMAIN',
+  projectId: 'VITE_FIREBASE_PROJECT_ID',
+  storageBucket: 'VITE_FIREBASE_STORAGE_BUCKET',
+  messagingSenderId: 'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  appId: 'VITE_FIREBASE_APP_ID',
+};
+
+
+
 // runtime warnings for missing env vars
 Object.entries(required).forEach(([k, v]) => {
-  if (!v) console.warn(`Missing VITE_FIREBASE_${k.toUpperCase()} in environment (.env)`);
+	const envName = envVarNames[k as keyof typeof required];
+	if (!v) console.warn(`Missing ${envName} in environment (.env)`);
 });
 
 const firebaseConfig = {
-  apiKey: required.apiKey,
-  authDomain: required.authDomain,
-  projectId: required.projectId,
-  storageBucket: required.storageBucket,
-  messagingSenderId: required.messagingSenderId,
-  appId: required.appId,
-  measurementId: (import.meta.env.VITE_FIREBASE_MEASUREMENT_ID as string | undefined) ?? undefined,
+	apiKey: required.apiKey,
+	authDomain: required.authDomain,
+	projectId: required.projectId,
+	storageBucket: required.storageBucket,
+	messagingSenderId: required.messagingSenderId,
+	appId: required.appId,
+	measurementId: (import.meta.env.VITE_FIREBASE_MEASUREMENT_ID as string | undefined) ?? undefined,
 };
 
 let _app: ReturnType<typeof initializeApp> | null = null;
@@ -41,31 +53,31 @@ let _storage: ReturnType<typeof getStorage> | null = null;
 export const googleProvider = new GoogleAuthProvider();
 
 function initApp(): ReturnType<typeof initializeApp> {
-  // In dev, print masked env diagnostic right when initialization is attempted.
-  // This helps confirm which VITE_FIREBASE_* values were bundled into the app.
-  if (import.meta.env.DEV) debugFirebaseEnv();
-  if (!_app) {
-    if (!firebaseConfig.apiKey) {
-      throw new Error('Missing VITE_FIREBASE_API_KEY in environment. Add .env and restart dev server.');
-    }
-    _app = initializeApp(firebaseConfig);
-  }
-  return _app;
+	// In dev, print masked env diagnostic right when initialization is attempted.
+	// This helps confirm which VITE_FIREBASE_* values were bundled into the app.
+	if (import.meta.env.DEV) debugFirebaseEnv();
+	if (!_app) {
+		if (!firebaseConfig.apiKey) {
+			throw new Error('Missing VITE_FIREBASE_API_KEY in environment. Add .env and restart dev server.');
+		}
+		_app = initializeApp(firebaseConfig);
+	}
+	return _app;
 }
 
 export function getAuthInstance() {
-  if (!_auth) _auth = getAuth(initApp());
-  return _auth;
+	if (!_auth) _auth = getAuth(initApp());
+	return _auth;
 }
 
 export function getFirestoreInstance() {
-  if (!_db) _db = getFirestore(initApp());
-  return _db;
+	if (!_db) _db = getFirestore(initApp());
+	return _db;
 }
 
 export function getStorageInstance() {
-  if (!_storage) _storage = getStorage(initApp());
-  return _storage;
+	if (!_storage) _storage = getStorage(initApp());
+	return _storage;
 }
 
 // Note: by using getters (getAuthInstance/getFirestoreInstance) we avoid
@@ -77,25 +89,25 @@ export function getStorageInstance() {
 // without exposing full secrets in logs. This helps diagnose "api-key-not-valid"
 // errors (wrong key, missing key, or key restricted to other referrers).
 function mask(val?: string) {
-  if (!val) return '<missing>';
-  if (val.length <= 10) return '********';
-  return `${val.slice(0, 6)}...${val.slice(-4)}`;
+	if (!val) return '<missing>';
+	if (val.length <= 10) return '********';
+	return `${val.slice(0, 6)}...${val.slice(-4)}`;
 }
 
 export function debugFirebaseEnv(): void {
-  if (!(import.meta.env.DEV)) return;
-  try {
-    // Only log masked/diagnostic info
-     
-    console.debug('Firebase env (masked):', {
-      apiKey: mask(required.apiKey as string | undefined),
-      authDomain: required.authDomain ?? '<missing>',
-      projectId: required.projectId ?? '<missing>',
-      storageBucket: required.storageBucket ?? '<missing>',
-      appId: required.appId ?? '<missing>',
-    });
-  } catch {
-    // noop - intentionally swallow debug errors
-  }
+	if (!(import.meta.env.DEV)) return;
+	try {
+		// Only log masked/diagnostic info
+		
+		console.debug('Firebase env (masked):', {
+			apiKey: mask(required.apiKey as string | undefined),
+			authDomain: required.authDomain ?? '<missing>',
+			projectId: required.projectId ?? '<missing>',
+			storageBucket: required.storageBucket ?? '<missing>',
+			appId: required.appId ?? '<missing>',
+		});
+	} catch {
+		// noop - intentionally swallow debug errors
+	}
 }
 
