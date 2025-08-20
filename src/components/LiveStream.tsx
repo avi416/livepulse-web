@@ -1,38 +1,39 @@
 import { useRef, useState } from "react";
-import { createBroadcasterPC, broadcasterCreateOffer } from "../services/webrtcService";
-import { createStreamMetadata } from "../services/streamService";
+import { createBroadcasterPC } from "../services/webrtcService";
+import { startLiveStream } from "../services/streamService";
 
 export default function LiveStream() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isLive, setIsLive] = useState(false);
   const [streamId, setStreamId] = useState<string | null>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
 
   const startLive = async () => {
     try {
+      console.log("🎥 Requesting camera + mic...");
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+
+      if (!stream) {
+        throw new Error("No MediaStream received from getUserMedia");
+      }
+
+      // שמור את ה־MediaStream
+      setLocalStream(stream);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
 
-      // create minimal metadata (no auth required). In production attach userId if authenticated.
-      const meta = {
-        title: 'Live stream',
-        description: 'Anonymous live stream',
-        createdAt: Date.now(),
-        isLive: true,
-        userId: null,
-      } as any;
-
-      const id = await createStreamMetadata(meta);
+      // צור רשומת liveStreams בפיירסטור
+      const id = await startLiveStream("My Live Stream");
       setStreamId(id);
 
-      const broadcaster = createBroadcasterPC(stream, id);
-      await broadcasterCreateOffer(broadcaster);
+      console.log("📡 Creating Broadcaster PC with stream:", stream);
+      await createBroadcasterPC(stream, id);
 
       setIsLive(true);
     } catch (err) {
-      console.error("Camera or signalling error:", err);
+      console.error("❌ Failed to start broadcast:", err);
       alert("לא ניתן להפעיל מצלמה/מיקרופון או להתחיל שידור");
     }
   };
@@ -54,7 +55,7 @@ export default function LiveStream() {
           onClick={startLive}
           className="mt-6 px-6 py-3 bg-pink-600 rounded-lg text-lg hover:bg-pink-700"
         >
-          Start Live (no auth)
+          Start Live
         </button>
       )}
 

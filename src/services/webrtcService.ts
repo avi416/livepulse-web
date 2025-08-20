@@ -1,110 +1,293 @@
-import { collection, doc, setDoc, onSnapshot, addDoc, getDoc } from 'firebase/firestore';
+// src/services/webrtcService.ts
+import { doc, getDoc, onSnapshot, collection, addDoc, setDoc } from 'firebase/firestore';
 import { getFirestoreInstance } from './firebase';
 
-/*
-  webrtcService: helpers to create RTCPeerConnection and use Firestore for signalling.
-  - broadcaster creates offer, writes to webrtcSignals/{streamId}
-  - offers ICE under webrtcSignals/{streamId}/offerCandidates
-  - watchers create answer, write to webrtcSignals/{streamId}
-  - watchers write ICE under .../answerCandidates
+const iceServers: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
 
-  This is a demo signalling implementation suitable for prototyping.
-*/
+/* ──────────────────────────────────────────────────────────────────────────
+ * Broadcaster: יוצר PeerConnection ושולח אודיו/וידאו דרך Firestore signalling
+ * מוסיף רק את ה־track הראשון מכל סוג (וידאו/אודיו) כדי להימנע מכפילויות
+ * ────────────────────────────────────────────────────────────────────────── */
+export async function createBroadcasterPC(
+  stream: MediaStream,                // ❗ חייב להיות MediaStream תקף
+  streamId: string,
+  onRemoteTrack?: (s: MediaStream) => void
+) {
+  if (!stream || !(stream instanceof MediaStream)) {
+    console.error('⚠️ createBroadcasterPC called without valid MediaStream!', stream);
+    throw new Error('❌ Broadcaster must be started with a valid MediaStream');
+  }
 
-const configuration: RTCConfiguration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+  console.log('🎥 Creating broadcaster PC for stream:', streamId);
+  console.log(
+    '📹 Local tracks:',
+    stream.getTracks().map((t) => ({
+      kind: t.kind,
+      id: t.id,
+      enabled: t.enabled,
+      muted: (t as MediaStreamTrack).muted,
+      readyState: (t as MediaStreamTrack).readyState,
+    })),
+  );
 
-export function createBroadcasterPC(stream: MediaStream | null, streamId: string, onRemoteTrack?: (s: MediaStream) => void) {
-  const pc = new RTCPeerConnection(configuration);
-  if (stream) stream.getTracks().forEach(t => pc.addTrack(t, stream));
+  const pc = new RTCPeerConnection({ iceServers });
+
+  // הוסף רק track אחד מכל סוג – זה יצמצם תקלות
+  const videoTrack = stream.getVideoTracks()[0] || null;
+  const audioTrack = stream.getAudioTracks()[0] || null;
+
+  if (videoTrack) {
+    console.log('➕ Adding VIDEO track:', videoTrack.id, {
+      enabled: videoTrack.enabled,
+      muted: videoTrack.muted,
+      readyState: videoTrack.readyState,
+    });
+    pc.addTrack(videoTrack, stream);
+  } else {
+    console.warn('⚠️ No local VIDEO track found');
+  }
+
+  if (audioTrack) {
+    console.log('➕ Adding AUDIO track:', audioTrack.id, {
+      enabled: audioTrack.enabled,
+      muted: audioTrack.muted,
+      readyState: audioTrack.readyState,
+    });
+    pc.addTrack(audioTrack, stream);
+  } else {
+    console.warn('⚠️ No local AUDIO track found');
+  }
 
   pc.ontrack = (event: RTCTrackEvent) => {
-    if (onRemoteTrack && event.streams && event.streams[0]) onRemoteTrack(event.streams[0]);
+    console.log('📡 Broadcaster got remote track (loopback?):', event.track.kind, {
+      readyState: event.track.readyState,
+      muted: event.track.muted,
+    });
+    if (onRemoteTrack && event.streams && event.streams[0]) {
+      onRemoteTrack(event.streams[0]);
+    }
   };
 
   const db = getFirestoreInstance();
-  const roomRef = doc(collection(db, 'webrtcSignals'), streamId);
-  const offerCandidatesCol = collection(roomRef, 'offerCandidates');
-  const answerCandidatesCol = collection(roomRef, 'answerCandidates');
+  const liveId = streamId;
 
-  pc.onicecandidate = async (event: RTCPeerConnectionIceEvent) => {
-    if (!event.candidate) return;
-    await addDoc(offerCandidatesCol, event.candidate.toJSON());
+  // שליחת ICE Candidates → candidates_broadcaster
+  pc.onicecandidate = async (e) => {
+    if (e.candidate) {
+      try {
+        console.log('🧊 Broadcaster ICE candidate:', e.candidate.candidate);
+        await addDoc(
+          collection(db, 'liveStreams', liveId, 'candidates_broadcaster'),
+          e.candidate.toJSON(),
+        );
+      } catch (err) {
+        console.error('❌ Failed to add broadcaster ICE candidate:', err);
+      }
+    }
   };
 
-  return { pc, roomRef, offerCandidatesCol, answerCandidatesCol };
-}
-
-export async function broadcasterCreateOffer(broadcaster: ReturnType<typeof createBroadcasterPC>) {
-  const { pc, roomRef, answerCandidatesCol } = broadcaster;
+  // יצירת Offer ושמירה ב־Firestore
+  console.log('📝 Creating broadcaster offer…');
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  await setDoc(roomRef, { type: 'offer', sdp: offer.sdp });
+  try {
+    await setDoc(doc(db, 'liveStreams', liveId, 'sdp', 'offer'), offer);
+    console.log('✅ Broadcaster offer saved');
+  } catch (err) {
+    console.error('❌ Failed to save offer:', err);
+    throw err;
+  }
 
-  const unsub = onSnapshot(roomRef, async (snap: { data?: () => unknown } | null) => {
-    const data = snap?.data?.() as Record<string, unknown> | undefined;
-    if (!data) return;
-    if (data.type === 'answer' && data.sdp) {
-      const answer = { type: 'answer', sdp: data.sdp } as RTCSessionDescriptionInit;
-      await pc.setRemoteDescription(answer);
-    }
-  });
-
-  const unsubIce = onSnapshot(answerCandidatesCol, (snap: { docChanges: () => Array<{ type: string; doc: { data: () => unknown } }> }) => {
-    // snap.docChanges() returns an array of change objects with .type and .doc
-    snap.docChanges().forEach((change) => {
-      if (change.type === 'added') {
-        const c = change.doc.data() as Record<string, unknown>;
-        const cand = c as unknown as RTCIceCandidateInit;
-        pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+  // האזנה ל־Answer מהצופה
+  const unsubAnswer = onSnapshot(
+    doc(db, 'liveStreams', liveId, 'sdp', 'answer'),
+    async (snap) => {
+      if (!snap.exists()) return;
+      const answer = snap.data();
+      try {
+        if (pc.signalingState !== 'stable') {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          console.log('✅ Remote description set from viewer answer');
+        } else {
+          console.log('ℹ️ Broadcaster signalingState is stable, skip setRemoteDescription');
+        }
+      } catch (err) {
+        console.error('❌ Failed to set remote description:', err);
       }
-    });
-  });
+    },
+  );
 
-  return { unsub, unsubIce };
+  // האזנה ל־ICE מהצופה
+  const unsubViewerICE = onSnapshot(
+    collection(db, 'liveStreams', liveId, 'candidates_viewers'),
+    (snap) => {
+      snap.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const c = change.doc.data();
+          console.log('🧊 Adding viewer ICE candidate:', c.candidate);
+          pc.addIceCandidate(new RTCIceCandidate(c)).catch((err) => {
+            console.error('❌ Failed to add viewer ICE candidate:', err);
+          });
+        }
+      });
+    },
+  );
+
+  // לוגים למעקב
+  pc.onconnectionstatechange = () => {
+    console.log('🔗 Broadcaster connection state:', pc.connectionState);
+  };
+  pc.oniceconnectionstatechange = () => {
+    console.log('🧊 Broadcaster ICE state:', pc.iceConnectionState);
+    if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+      console.warn('⚠️ Broadcaster ICE issue:', pc.iceConnectionState);
+    }
+  };
+
+  return { pc, unsubAnswer, unsubViewerICE };
 }
 
-export async function watcherJoin(streamId: string, videoEl: HTMLVideoElement, localStream: MediaStream | null) {
-  const pc = new RTCPeerConnection(configuration);
-
-  if (localStream) localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
+/* ──────────────────────────────────────────────────────────────────────────
+ * Viewer: קורא Offer, מחזיר Answer ומתחבר לשידור
+ * מטפל ב-autoplay (הוספת מאזיני click/touch/keydown במקרה של חסימה)
+ * ────────────────────────────────────────────────────────────────────────── */
+export async function connectAsViewer(liveId: string, videoEl: HTMLVideoElement) {
+  console.log('👁️ Connecting as viewer to stream:', liveId);
 
   const db = getFirestoreInstance();
-  const roomRef = doc(collection(db, 'webrtcSignals'), streamId);
-  const offerCandidatesCol = collection(roomRef, 'offerCandidates');
-  const answerCandidatesCol = collection(roomRef, 'answerCandidates');
 
-  pc.ontrack = (event: RTCTrackEvent) => {
-    videoEl.srcObject = event.streams[0];
-    videoEl.play().catch(() => {});
+  // בדיקה אם השידור קיים ובלייב
+  const liveRef = doc(db, 'liveStreams', liveId);
+  const liveSnap = await getDoc(liveRef);
+  if (!liveSnap.exists()) throw new Error('Live not found');
+  const live = liveSnap.data() as any;
+  if (live.status !== 'live') throw new Error('Live has ended');
+
+  // קריאת Offer
+  const offerRef = doc(db, 'liveStreams', liveId, 'sdp', 'offer');
+  const offerSnap = await getDoc(offerRef);
+  if (!offerSnap.exists()) throw new Error('Offer not found');
+  const offer = offerSnap.data();
+
+  const pc = new RTCPeerConnection({ iceServers });
+
+  // פונקציה שמנסה לנגן וידאו (מטפלת ב-autoplay block)
+  function tryPlay(video: HTMLVideoElement) {
+    video
+      .play()
+      .then(() => {
+        console.log('▶️ Video started automatically');
+      })
+      .catch((err) => {
+        console.warn('⚠️ Autoplay blocked, waiting for user gesture:', err);
+        const resume = () => {
+          video.play().catch((e) => console.warn('❌ Still failed to play:', e));
+          window.removeEventListener('click', resume);
+          window.removeEventListener('touchstart', resume);
+          window.removeEventListener('keydown', resume);
+        };
+        window.addEventListener('click', resume, { once: true });
+        window.addEventListener('touchstart', resume, { once: true });
+        window.addEventListener('keydown', resume, { once: true });
+      });
+  }
+
+  // קבלת Tracks מהשדר
+  pc.ontrack = (e) => {
+    console.log('📡 Viewer received track:', e.track.kind, {
+      muted: e.track.muted,
+      readyState: e.track.readyState,
+    });
+
+    // נשתמש ב־stream שה-RTC מוסיף (e.streams[0])
+    const incoming = e.streams && e.streams[0];
+    if (incoming) {
+      if (videoEl.srcObject !== incoming) {
+        console.log('🎥 Using e.streams[0]');
+        videoEl.srcObject = incoming;
+      }
+
+      // הגדרות מומלצות לצפייה
+      videoEl.autoplay = true;
+      videoEl.playsInline = true;
+      videoEl.controls = true;
+      videoEl.muted = true; // תחילה על mute כדי לאפשר autoplay; המשתמש יוכל להפעיל קול ידנית
+      tryPlay(videoEl);
+    }
   };
 
-  pc.onicecandidate = async (event: RTCPeerConnectionIceEvent) => {
-    if (!event.candidate) return;
-    await addDoc(answerCandidatesCol, event.candidate.toJSON());
+  // שליחת ICE Candidates → candidates_viewers
+  pc.onicecandidate = async (e) => {
+    if (e.candidate) {
+      try {
+        await addDoc(collection(db, 'liveStreams', liveId, 'candidates_viewers'), e.candidate.toJSON());
+        console.log('🧊 Viewer ICE candidate sent');
+      } catch (err) {
+        console.error('❌ Failed to add viewer ICE candidate:', err);
+      }
+    }
   };
 
-  const snap = await getDoc(roomRef);
-  const data = snap.data() as Record<string, unknown> | undefined;
-  if (!data || data.type !== 'offer') throw new Error('Offer not found');
+  // Offer → RemoteDescription
+  await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
-  const offerDesc = { type: 'offer', sdp: data.sdp } as RTCSessionDescriptionInit;
-  await pc.setRemoteDescription(offerDesc);
-
+  // Answer → Firestore
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
+  try {
+    await setDoc(doc(db, 'liveStreams', liveId, 'sdp', 'answer'), answer);
+    console.log('✅ Viewer answer saved');
+  } catch (err) {
+    console.error('❌ Failed to save answer:', err);
+    throw err;
+  }
 
-  await setDoc(roomRef, { type: 'answer', sdp: answer.sdp });
+  // ICE Candidates ← Broadcaster
+  const unsubBroadcasterICE = onSnapshot(
+    collection(db, 'liveStreams', liveId, 'candidates_broadcaster'),
+    (snap) => {
+      snap.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const c = change.doc.data();
+          console.log('🧊 Adding broadcaster ICE candidate:', c.candidate);
+          pc.addIceCandidate(new RTCIceCandidate(c)).catch((err) => {
+            console.error('❌ Failed to add broadcaster ICE candidate:', err);
+          });
+        }
+      });
+    },
+  );
 
-  const unsubOfferIce = onSnapshot(offerCandidatesCol, (snap2: { docChanges: () => Array<{ type: string; doc: { data: () => unknown } }> }) => {
-    snap2.docChanges().forEach((change) => {
-      if (change.type === 'added') {
-        const c = change.doc.data() as Record<string, unknown>;
-        const cand = c as unknown as RTCIceCandidateInit;
-        pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
-      }
-    });
-  });
+  // לוגים
+  pc.onconnectionstatechange = () => {
+    console.log('🔗 Viewer connection state:', pc.connectionState);
+  };
+  pc.oniceconnectionstatechange = () => {
+    console.log('🧊 Viewer ICE state:', pc.iceConnectionState);
+  };
 
-  return { pc, unsubOfferIce };
+  const cleanup = () => {
+    try {
+      unsubBroadcasterICE();
+    } catch {}
+    try {
+      pc.close();
+    } catch {}
+  };
+
+  return { pc, cleanup };
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * תאימות לאחור
+ * ────────────────────────────────────────────────────────────────────────── */
+export async function broadcasterCreateOffer(broadcaster: ReturnType<typeof createBroadcasterPC>) {
+  return broadcaster;
+}
+export async function watcherJoin(streamId: string, videoEl: HTMLVideoElement) {
+  return await connectAsViewer(streamId, videoEl);
 }

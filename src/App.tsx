@@ -11,10 +11,12 @@ import GoLive from './pages/GoLive';
 import LiveHub from './pages/LiveHub';
 import LiveWatch from './pages/LiveWatch';
 import LiveViewer from './pages/LiveViewer';
+import WatchStream from './pages/WatchStream';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 import Register from './pages/Register';
 import Login from './pages/Login';
+import Viewer from "./pages/Viewer"; // 👈 הוספנו את זה
 
 export default function App() {
   return (
@@ -71,6 +73,12 @@ export default function App() {
             } />
             <Route path="*" element={<NotFound />} />
           </Route>
+          
+          {/* Public route for watching streams - no authentication required */}
+          <Route path="/watch/:id" element={<WatchStream />} />
+
+          {/* Public route for testing Viewer manually */}
+          <Route path="/viewer" element={<Viewer />} /> {/* 👈 כאן מוסיפים */}
         </Routes>
       </BrowserRouter>
     </AuthProvider>

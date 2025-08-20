@@ -18,7 +18,7 @@ export default function Home() {
       ) : (
         <div className="grid gap-3">
           {liveStreams.map((l) => (
-            <Link key={l.id} to={`/live/watch/${l.id}`} className="flex items-center gap-3 p-3 rounded-md bg-[var(--panel)] hover:bg-[var(--panel)]/70 transition-colors">
+            <Link key={l.id} to={`/watch/${l.id}`} className="flex items-center gap-3 p-3 rounded-md bg-[var(--panel)] hover:bg-[var(--panel)]/70 transition-colors">
               {l.photoURL ? (
                 <img src={l.photoURL} alt={l.displayName} className="w-12 h-12 rounded-full object-cover" />
               ) : (

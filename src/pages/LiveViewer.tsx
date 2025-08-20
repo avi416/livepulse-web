@@ -7,14 +7,14 @@ export default function LiveViewer() {
   const { id } = useParams();
   const [error, setError] = useState<string | null>(null);
   const remoteRef = useRef<HTMLVideoElement | null>(null);
-  const { start, stream } = useLocalMedia();
+  const { start } = useLocalMedia();
 
   const join = async (streamId?: string) => {
     const sid = streamId ?? id;
     if (!sid) return setError('Missing stream id');
     try {
       await start();
-      await watcherJoin(sid, remoteRef.current as HTMLVideoElement, stream);
+      await watcherJoin(sid, remoteRef.current as HTMLVideoElement);
     } catch (err: any) {
       setError(err?.message ?? String(err));
     }
@@ -23,7 +23,7 @@ export default function LiveViewer() {
   return (
     <div className="pt-12 max-w-3xl mx-auto p-4">
       <h2 className="text-2xl font-semibold">Viewer</h2>
-      <p className="mt-2 text-[var(--muted)]">Join a live stream</p>
+      <p className="text-[var(--muted)]">Join a live stream</p>
 
       <div className="mt-4">
         <button onClick={() => join()} className="px-4 py-2 bg-[var(--panel)] rounded">Join</button>
