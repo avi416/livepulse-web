@@ -23,7 +23,7 @@ export default function UserAvatar({ photoURL, displayName, email, size = 36, cl
 
   return (
     <div
-      className={`flex items-center justify-center bg-slate-700 text-white rounded-full font-medium ${className}`}
+      className={`flex items-center justify-center bg-primary text-white rounded-full font-medium ${className}`}
       style={{ width: size, height: size }}
       aria-hidden
     >

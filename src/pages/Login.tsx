@@ -19,7 +19,7 @@ export default function Login() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      navigate('/profile/me');
+      navigate('/');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
@@ -42,7 +42,7 @@ export default function Login() {
         role: 'user',
         createdAt: serverTimestamp(),
       }, { merge: true });
-      navigate('/profile/me');
+      navigate('/');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);

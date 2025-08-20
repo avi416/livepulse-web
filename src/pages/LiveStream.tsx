@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocalMedia } from '../hooks/useLocalMedia';
 import { createBroadcasterPC, broadcasterCreateOffer, watcherJoin } from '../services/webrtcService';
-import { createStreamMetadata } from '../services/streamService';
+import { startLiveStream, endLiveStream } from '../services/liveStreams';
 import useAuthUser from '../hooks/useAuthUser';
 
 export default function LiveStreamPage() {
@@ -9,13 +9,25 @@ export default function LiveStreamPage() {
   const remoteRef = useRef<HTMLVideoElement | null>(null);
   const [streamIdInput, setStreamIdInput] = useState('');
   const [myStreamId, setMyStreamId] = useState<string | null>(null);
+  const [title, setTitle] = useState('My Live Stream');
   const { user } = useAuthUser();
+
+  useEffect(() => {
+    return () => {
+      if (myStreamId) {
+        endLiveStream(myStreamId).catch(() => {});
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myStreamId]);
 
   const startBroadcast = async () => {
     await start();
-    // create metadata and signalling doc
-  const meta = { title: 'Peer stream', createdAt: Date.now(), isLive: true, userId: user?.uid ?? null } as any;
-    const id = await createStreamMetadata(meta);
+    if (!user) {
+      alert('You must be signed in to go live');
+      return;
+    }
+    const id = await startLiveStream(title || 'Live');
     setMyStreamId(id);
 
     const broadcaster = createBroadcasterPC(stream, id, (s) => {
@@ -29,8 +41,15 @@ export default function LiveStreamPage() {
     const id = streamIdInput.trim();
     if (!id) return alert('Enter stream id');
     setMyStreamId(id);
-  await watcherJoin(id, remoteRef.current as HTMLVideoElement, stream);
-    // remote will be attached by watcherJoin ontrack handler
+    await watcherJoin(id, remoteRef.current as HTMLVideoElement, stream);
+  };
+
+  const stopBroadcast = async () => {
+    await stop();
+    if (myStreamId) {
+      await endLiveStream(myStreamId);
+      setMyStreamId(null);
+    }
   };
 
   return (
@@ -49,11 +68,12 @@ export default function LiveStreamPage() {
         </div>
       </div>
 
-      <div className="mt-6 flex gap-4">
+      <div className="mt-6 flex flex-wrap gap-4 items-center">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Live title" className="px-2 py-1 rounded text-black" />
         <button onClick={startBroadcast} disabled={isActive} className="px-4 py-2 bg-green-600 rounded">Start Broadcast</button>
         <button onClick={joinAsPeer} disabled={isActive} className="px-4 py-2 bg-blue-600 rounded">Join by ID</button>
         <input value={streamIdInput} onChange={(e) => setStreamIdInput(e.target.value)} placeholder="stream id" className="px-2 py-1 rounded text-black" />
-        {isActive && <button onClick={stop} className="px-4 py-2 bg-red-600 rounded">Stop</button>}
+        {isActive && <button onClick={stopBroadcast} className="px-4 py-2 bg-red-600 rounded">Stop</button>}
       </div>
 
       {myStreamId && <div className="mt-4 text-sm text-gray-300">Active ID: {myStreamId}</div>}
