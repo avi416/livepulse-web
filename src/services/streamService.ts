@@ -1,6 +1,5 @@
 import type { Stream } from '../types/stream';
 import { collection, addDoc, doc, setDoc, getDoc, getDocs } from 'firebase/firestore';
-import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import { getFirestoreInstance } from './firebase';
 
 // Return all streams (firestore-backed). In production you might add queries for only live streams.

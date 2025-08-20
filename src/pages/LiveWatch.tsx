@@ -26,7 +26,7 @@ export default function LiveWatch() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-medium">{s.title || 'Untitled stream'}</div>
-                <div className="text-sm text-[var(--muted)]">{s.viewerCount ?? 0} viewers</div>
+                <div className="text-sm text-[var(--muted)]">{s.viewers ?? 0} viewers</div>
               </div>
               <div className="text-sm text-[var(--muted)]">Watch</div>
             </div>

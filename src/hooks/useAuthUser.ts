@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import type { Unsubscribe } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getAuthInstance } from '../services/firebase';
 
@@ -16,7 +15,7 @@ export default function useAuthUser() {
 
   useEffect(() => {
     const auth = getAuthInstance();
-    const unsub: Unsubscribe = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth, (u: any) => {
       if (u) {
         setUser({
           uid: u.uid,

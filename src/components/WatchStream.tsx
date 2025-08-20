@@ -15,8 +15,8 @@ export default function WatchStream({ streamId }: Props) {
       if (!meta) return setError('Stream not found');
       if (!videoRef.current) return;
       try {
-        const res = await watcherJoin(streamId, videoRef.current);
-        unsub = res.unsubOfferIce;
+  const res = await watcherJoin(streamId, videoRef.current, null);
+  unsub = res.unsubOfferIce;
       } catch (e: any) {
         setError(e.message);
       }

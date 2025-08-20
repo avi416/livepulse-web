@@ -9,7 +9,7 @@ export function useAuth() {
   function login(username: string) {
     setLoading(true);
     setTimeout(() => {
-      setUser({ id: '1', username, avatarUrl: '' });
+  setUser({ uid: '1', handle: username, name: username, avatarUrl: '' });
       setLoading(false);
     }, 500);
   }
