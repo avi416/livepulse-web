@@ -9,22 +9,32 @@ import UserAvatar from '../components/UserAvatar';
 export default function WatchStream() {
   const { id } = useParams<{ id: string }>();
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [videoReady, setVideoReady] = useState(false);
   const [streamData, setStreamData] = useState<LiveStreamDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<string>('Waiting for stream...');
   const cleanupRef = useRef<(() => void) | null>(null);
+  const connectingRef = useRef(false);
+
+  // ref callback to detect when the <video> is mounted
+  const setVideoRef = (el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+    if (el && !videoReady) setVideoReady(true);
+  };
 
   // debug: וידאו אלמנט
   useEffect(() => {
     if (!videoRef.current) return;
     const v = videoRef.current;
 
-    v.autoplay = true;
-    v.playsInline = true;
-    v.controls = true;
-    v.muted = false;
+  v.autoplay = true;
+  v.playsInline = true;
+  v.controls = true;
+  // keep muted for autoplay compliance; audio can be toggled by user
+  v.muted = true;
 
     v.onloadedmetadata = () => {
       console.log('🎥 loadedmetadata', {
@@ -72,51 +82,15 @@ export default function WatchStream() {
           return;
         }
 
-        // אם השידור בלייב – חיבור
+        // אם השידור בלייב – נשמור סטטוס ונחכה ל-effect שמוודא שהוידאו מוכן
         if (data.status === 'live' && !isConnected) {
           console.log('🔍 DEBUG connect conditions:', {
             status: data.status,
             isConnected,
             hasVideoRef: !!videoRef.current,
           });
-
-          // אם הוידאו עדיין לא מוכן – ננסה שוב בעוד 500ms
           if (!videoRef.current) {
-            console.warn('⚠️ Video element not ready yet, retrying in 500ms…');
-            setTimeout(() => {
-              if (videoRef.current && !isConnected) {
-                setConnectionStatus('Connecting to stream…');
-                connectAsViewer(id, videoRef.current)
-                  .then((result) => {
-                    console.log('✅ Connection successful (retry):', result);
-                    setIsConnected(true);
-                    setConnectionStatus('Connected to stream');
-                    cleanupRef.current = result.cleanup;
-                  })
-                  .catch((err: any) => {
-                    console.error('❌ Failed to connect (retry):', err);
-                    setError(err.message || 'Failed to connect to stream');
-                    setConnectionStatus('Connection failed');
-                  });
-              }
-            }, 500);
-            setLoading(false);
-            return;
-          }
-
-          // יש אלמנט וידאו – מתחברים עכשיו
-          console.log('🔗 Stream is live, attempting connection…');
-          setConnectionStatus('Connecting to stream…');
-          try {
-            const result = await connectAsViewer(id, videoRef.current);
-            console.log('✅ Connection successful:', result);
-            setIsConnected(true);
-            setConnectionStatus('Connected to stream');
-            cleanupRef.current = result.cleanup;
-          } catch (err: any) {
-            console.error('❌ Failed to connect:', err);
-            setError(err.message || 'Failed to connect to stream');
-            setConnectionStatus('Connection failed');
+            setConnectionStatus('Preparing video element…');
           }
         }
 
@@ -137,7 +111,46 @@ export default function WatchStream() {
         cleanupRef.current();
       }
     };
-  }, [id, isConnected]);
+  }, [id]);
+
+  // Attempt connection once all preconditions are met
+  useEffect(() => {
+    if (!id) return;
+    if (isConnected) return;
+    if (!videoRef.current || !videoReady) return;
+    if (streamData?.status !== 'live') return;
+    if (connectingRef.current) return;
+
+    const el = videoRef.current;
+    connectingRef.current = true;
+    setConnectionStatus('Connecting to stream…');
+    connectAsViewer(id, el!)
+      .then((result) => {
+        console.log('✅ Connection successful:', result);
+        setIsConnected(true);
+        setConnectionStatus('Connected to stream');
+        cleanupRef.current = result.cleanup;
+      })
+      .catch((err: any) => {
+        console.error('❌ Failed to connect:', err);
+        setError(err.message || 'Failed to connect to stream');
+        setConnectionStatus('Connection failed');
+      })
+      .finally(() => {
+        connectingRef.current = false;
+      });
+  }, [id, videoReady, streamData?.status, isConnected]);
+
+  const toggleFullscreen = () => {
+    const el = containerRef.current || videoRef.current;
+    if (!el) return;
+    const d = document as any;
+    if (!document.fullscreenElement) {
+      (el as any).requestFullscreen?.() || (el as any).webkitRequestFullscreen?.();
+    } else {
+      d.exitFullscreen?.() || d.webkitExitFullscreen?.();
+    }
+  };
 
   if (loading) {
     return (
@@ -196,16 +209,26 @@ export default function WatchStream() {
 
       {/* Video */}
       <div className="flex justify-center mb-6">
-        <div className="relative w-full max-w-md">
-          <div className="aspect-[9/16] w-full rounded-lg overflow-hidden bg-black">
+        <div ref={containerRef} className="relative w-full max-w-[320px] md:max-w-[360px] lg:max-w-[400px]">
+          <div className="aspect-[9/16] w-full rounded-lg overflow-hidden bg-black relative">
            <video
-  ref={videoRef}
+  ref={setVideoRef}
   autoPlay
   playsInline
   controls
-  muted    // 👈 חובה בשביל autoplay לעבוד
-  className="w-full h-full object-cover bg-black"
+  muted
+  className="w-full h-full object-contain bg-black"
 />
+
+            {/* Fullscreen toggle */}
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className="absolute top-2 right-2 z-10 px-2 py-1 text-xs rounded bg-black/60 text-white hover:bg-black/80"
+              aria-label="Toggle fullscreen"
+            >
+              Fullscreen
+            </button>
 
           </div>
         </div>

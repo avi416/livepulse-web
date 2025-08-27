@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getLiveStreams } from '../services/streamService';
-import type { Stream } from '../types/stream';
+import { getLiveOnlyStreams, type LiveStreamDoc } from '../services/streamService';
 
 export default function LiveWatch() {
-  const [streams, setStreams] = useState<Stream[]>([]);
+  const [streams, setStreams] = useState<LiveStreamDoc[]>([]);
 
   useEffect(() => {
     let mounted = true;
-    getLiveStreams().then((s) => {
+  getLiveOnlyStreams().then((s) => {
       if (mounted) setStreams(s || []);
     }).catch(() => {
       if (mounted) setStreams([]);
@@ -22,13 +21,13 @@ export default function LiveWatch() {
       <div className="mt-4 grid gap-3">
         {streams.length === 0 && <div className="text-[var(--muted)]">No active streams right now.</div>}
         {streams.map(s => (
-          <Link key={s.id} to={`/live/watch/${s.id}`} className="p-3 rounded bg-[var(--panel)]">
+          <Link key={s.id} to={`/watch/${s.id}`} className="p-3 rounded bg-[var(--panel)]">
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-medium">{s.title || 'Untitled stream'}</div>
-                <div className="text-sm text-[var(--muted)]">{s.viewers ?? 0} viewers</div>
+                <div className="text-sm text-[var(--muted)]">by {s.displayName || 'Unknown'}</div>
               </div>
-              <div className="text-sm text-[var(--muted)]">Watch</div>
+              <span className="ml-auto text-xs px-2 py-1 rounded bg-red-600 text-white">LIVE</span>
             </div>
           </Link>
         ))}

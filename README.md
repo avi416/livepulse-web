@@ -1,6 +1,6 @@
-# React + TypeScript + Vite
+# LivePulse Web — React + TypeScript + Vite
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This app includes a simple WebRTC live streaming flow (Broadcaster ↔ Viewer) using Firebase Firestore for signaling.
 
 Currently, two official plugins are available:
 
@@ -67,3 +67,23 @@ export default tseslint.config([
   },
 ])
 ```
+
+## Quick start (WebRTC + TURN)
+
+1) Copy `.env.example` to `.env.local` and fill your Firebase values. For stable WebRTC across NATs, add TURN (recommended):
+
+```
+VITE_TURN_URL=turn:turn.example.com:3478
+VITE_TURN_USERNAME=turnUser
+VITE_TURN_CREDENTIAL=turnPass
+# Optional for strict NAT testing
+# VITE_FORCE_RELAY_FOR_VIEWER=true
+```
+
+2) Start dev server and open the app in two tabs/machines (one as broadcaster, one as viewer).
+
+3) If the viewer sees a black screen and logs show ICE `disconnected/failed` on the broadcaster, configure a working TURN server or set `VITE_FORCE_RELAY_FOR_VIEWER=true` to force relay.
+
+Notes:
+- Signaling collections live under `liveStreams/{id}/sdp/{offer|answer}` and ICE in `candidates_broadcaster`/`candidates_viewers`.
+- The app automatically handles ICE restarts and renegotiation.

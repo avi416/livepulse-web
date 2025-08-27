@@ -9,22 +9,22 @@ export default function WatchStream({ streamId }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let unsub: any;
+  let cleanup: (() => void) | null = null;
     async function join() {
       const meta = await getStreamById(streamId);
       if (!meta) return setError('Stream not found');
       if (!videoRef.current) return;
       try {
-  const res = await watcherJoin(streamId, videoRef.current, null);
-  unsub = res.unsubOfferIce;
+    const res = await watcherJoin(streamId, videoRef.current);
+    cleanup = res.cleanup;
       } catch (e: any) {
         setError(e.message);
       }
     }
     join();
-    return () => { if (unsub) unsub(); };
+  return () => { try { cleanup?.(); } catch {} };
   }, [streamId]);
 
   if (error) return <div>Error: {error}</div>;
-  return <video ref={videoRef} controls className="w-full h-auto bg-black" />;
+  return <video ref={videoRef} autoPlay playsInline controls className="w-full h-auto bg-black" />;
 }
