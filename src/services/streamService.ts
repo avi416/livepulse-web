@@ -9,9 +9,13 @@ import {
   updateDoc,
   query,
   where,
-  orderBy
+  orderBy,
+  onSnapshot,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 import { getFirestoreInstance } from './firebase';
+import { LIVE_OWNER_FIELD } from '../constants/firestore';
 import { getAuth } from 'firebase/auth';
 
 export type LiveStreamStatus = 'live' | 'ended';
@@ -32,10 +36,11 @@ export interface LiveStreamDoc {
   startedAt: unknown;
   endedAt?: unknown;
   lastSeen?: unknown;
-  uid?: string | null;
-  userId?: string | null;
+  userId: string | null; // canonical owner field
+  uid?: string | null;   // legacy, optional for backwards compat
   displayName?: string | null;
   photoURL?: string | null;
+  participants?: string[];
 }
 
 /**
@@ -67,17 +72,32 @@ export async function startLiveStream(title: string): Promise<string> {
     }
   }
 
+  // Write primary live doc
   await setDoc(ref, {
     id: liveId,
     title,
     status: 'live',
     startedAt: serverTimestamp(),
   lastSeen: serverTimestamp(),
-    uid: user ? user.uid : null,
-    userId: user ? user.uid : null,
+  // write both for backward compat, but treat userId as canonical everywhere
+  uid: user ? user.uid : null,
+  [LIVE_OWNER_FIELD]: user ? user.uid : null,
     displayName: user?.displayName || 'Anonymous',
     photoURL: user?.photoURL || null,
   });
+
+  // Mirror into legacy directory collection 'streams' with same id for discovery
+  await setDoc(doc(db, 'streams', liveId), {
+    id: liveId,
+    title,
+    isLive: true,
+    startedAt: serverTimestamp(),
+    lastSeen: serverTimestamp(),
+    userId: user ? user.uid : null,
+    uid: user ? user.uid : null,
+    displayName: user?.displayName || 'Anonymous',
+    photoURL: user?.photoURL || null,
+  }, { merge: true });
 
   return liveId;
 }
@@ -91,6 +111,13 @@ export async function endLiveStream(id: string): Promise<void> {
     status: 'ended',
     endedAt: serverTimestamp(),
   });
+  // Mirror end to 'streams'
+  try {
+    await updateDoc(doc(db, 'streams', id), {
+      isLive: false,
+      endedAt: serverTimestamp(),
+    });
+  } catch {}
 }
 
 /**
@@ -133,7 +160,86 @@ export async function getLiveOnlyStreams(): Promise<LiveStreamDoc[]> {
  */
 export async function heartbeatLiveStream(id: string): Promise<void> {
   const db = getFirestoreInstance();
-  await updateDoc(doc(db, 'liveStreams', id), { lastSeen: serverTimestamp() });
+  await updateDoc(doc(db, 'liveStreams', id), { lastSeen: serverTimestamp(), status: 'live' });
+  // Keep legacy directory doc fresh too
+  try {
+    await updateDoc(doc(db, 'streams', id), {
+      lastSeen: serverTimestamp(),
+      isLive: true,
+    });
+  } catch {}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Co-host requests API
+// ─────────────────────────────────────────────────────────────────────────────
+export type JoinRequestStatus = 'pending' | 'approved' | 'rejected';
+export interface JoinRequestDoc {
+  userId: string;
+  status: JoinRequestStatus;
+  createdAt: unknown; // Timestamp
+  approvedAt?: unknown;
+  rejectedAt?: unknown;
+  displayName?: string | null;
+  photoURL?: string | null;
+}
+
+export async function requestToJoin(liveId: string, userId: string): Promise<void> {
+  const db = getFirestoreInstance();
+  const auth = getAuth();
+  const u = auth.currentUser;
+  await setDoc(doc(db, 'liveStreams', liveId, 'requests', userId), {
+    userId,
+    status: 'pending',
+    createdAt: serverTimestamp(),
+    displayName: u?.displayName ?? null,
+    photoURL: u?.photoURL ?? null,
+  } as JoinRequestDoc);
+}
+
+export function subscribeToRequests(liveId: string, cb: (items: (JoinRequestDoc & { id: string })[]) => void): () => void {
+  const db = getFirestoreInstance();
+  const q = query(collection(db, 'liveStreams', liveId, 'requests'), orderBy('createdAt', 'asc'));
+  return onSnapshot(q, (snap: any) => {
+    const items = (snap.docs as any[]).map((d: any) => ({ id: d.id, ...(d.data() as JoinRequestDoc) }));
+    cb(items);
+  });
+}
+
+export function subscribeToMyRequest(
+  liveId: string,
+  userId: string,
+  cb: (req: (JoinRequestDoc & { id: string }) | null) => void
+): () => void {
+  const db = getFirestoreInstance();
+  const ref = doc(db, 'liveStreams', liveId, 'requests', userId);
+  return onSnapshot(ref, (snap: any) => {
+    if (!snap.exists()) { cb(null); return; }
+    const data = snap.data() as JoinRequestDoc;
+    cb({ id: snap.id, ...data });
+  });
+}
+
+export async function approveJoinRequest(liveId: string, userId: string): Promise<void> {
+  const db = getFirestoreInstance();
+  await updateDoc(doc(db, 'liveStreams', liveId, 'requests', userId), {
+    status: 'approved',
+    approvedAt: serverTimestamp(),
+  });
+  await updateDoc(doc(db, 'liveStreams', liveId), { participants: arrayUnion(userId) });
+}
+
+export async function rejectJoinRequest(liveId: string, userId: string): Promise<void> {
+  const db = getFirestoreInstance();
+  await updateDoc(doc(db, 'liveStreams', liveId, 'requests', userId), {
+    status: 'rejected',
+    rejectedAt: serverTimestamp(),
+  });
+}
+
+export async function removeParticipant(liveId: string, userId: string): Promise<void> {
+  const db = getFirestoreInstance();
+  await updateDoc(doc(db, 'liveStreams', liveId), { participants: arrayRemove(userId) });
 }
 
 /**
@@ -141,6 +247,8 @@ export async function heartbeatLiveStream(id: string): Promise<void> {
  */
 export async function createStreamMetadata(stream: Omit<Stream, 'id'>) {
   const db = getFirestoreInstance();
+  // Prefer explicit ID sync with liveStreams: this helper remains for compatibility
+  // Callers should mirror using the same id as liveStreams; here we keep the old path for safety
   const col = collection(db, 'streams');
   const ref = await addDoc(col, stream as any);
   await setDoc(doc(db, 'streams', ref.id), { ...stream, id: ref.id });

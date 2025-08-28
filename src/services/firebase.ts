@@ -5,7 +5,7 @@
 // dynamically import firebase packages when used.
 // Static Firebase v9 modular setup. Ensure you set VITE_FIREBASE_* env vars.
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
@@ -66,7 +66,11 @@ function initApp(): ReturnType<typeof initializeApp> {
 }
 
 export function getAuthInstance() {
-	if (!_auth) _auth = getAuth(initApp());
+	if (!_auth) {
+		_auth = getAuth(initApp());
+		// Best-effort: configure persistence to avoid mobile cookie/indexedDB issues
+		configureAuthPersistence(_auth).catch(() => {});
+	}
 	return _auth;
 }
 
@@ -105,9 +109,24 @@ export function debugFirebaseEnv(): void {
 			projectId: required.projectId ?? '<missing>',
 			storageBucket: required.storageBucket ?? '<missing>',
 			appId: required.appId ?? '<missing>',
+			host: typeof window !== 'undefined' ? window.location.host : '<ssr>'
 		});
 	} catch {
 		// noop - intentionally swallow debug errors
 	}
+}
+
+async function configureAuthPersistence(auth: ReturnType<typeof getAuth>): Promise<void> {
+	try {
+		await setPersistence(auth, browserLocalPersistence);
+		return;
+	} catch {}
+	try {
+		await setPersistence(auth, browserSessionPersistence);
+		return;
+	} catch {}
+	try {
+		await setPersistence(auth, inMemoryPersistence);
+	} catch {}
 }
 

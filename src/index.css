@@ -1,3 +1,5 @@
+/* tiktok.css removed; canonical video styles live in styles/components/watch-video.css */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -34,8 +36,5 @@ body {
 	--accent: #60a5fa;
 	color-scheme: dark;
 }
-
-
-@import './styles/tiktok.css';
 
 

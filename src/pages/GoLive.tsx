@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthUser from '../hooks/useAuthUser';
-import LiveStreamPage from './LiveStream';
+import LiveStream from '../components/LiveStream';
 
 export default function GoLive() {
   const { user, loading } = useAuthUser();
@@ -15,5 +15,5 @@ export default function GoLive() {
   if (!user) return null;
 
   // משתמש מחובר – מציגים את דף הלייב
-  return <LiveStreamPage />;
+  return <LiveStream />;
 }

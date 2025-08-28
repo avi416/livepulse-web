@@ -4,46 +4,87 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { getFirestoreInstance } from '../services/firebase';
 import { connectAsViewer } from '../services/webrtcService';
 import type { LiveStreamDoc } from '../services/liveStreams';
+import { normalizeLiveDoc } from '../utils/liveDoc';
 import UserAvatar from '../components/UserAvatar';
+import RequestToJoinButton from '../components/cohost/RequestToJoinButton';
+import '../styles/cohost.css';
+import '../styles/components/watch-video.css';
 
 export default function WatchStream() {
   const { id } = useParams<{ id: string }>();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [stageMode, setStageMode] = useState<'portrait' | 'landscape' | 'square'>('portrait');
   const [videoReady, setVideoReady] = useState(false);
   const [streamData, setStreamData] = useState<LiveStreamDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<string>('Waiting for stream...');
+  const [muted, setMuted] = useState(false);
+  const [needsGesture, setNeedsGesture] = useState(true);
   const cleanupRef = useRef<(() => void) | null>(null);
   const connectingRef = useRef(false);
 
   // ref callback to detect when the <video> is mounted
   const setVideoRef = (el: HTMLVideoElement | null) => {
     videoRef.current = el;
-    if (el && !videoReady) setVideoReady(true);
+    if (el && !videoReady) {
+      // הגדרת מאפיין data-source לזיהוי סוג המקור (יעודכן בהמשך לפי המידע מהסטרים)
+      el.setAttribute('data-source', 'default');
+      setVideoReady(true);
+    }
   };
 
-  // debug: וידאו אלמנט
-  useEffect(() => {
-    if (!videoRef.current) return;
-    const v = videoRef.current;
+  // פונקציה לזיהוי מקור הסטרים (מובייל או אחר) ועדכון הסגנון בהתאם
+  const detectStreamSource = (videoElement: HTMLVideoElement) => {
+    if (!videoElement) return;
+    
+    console.log('🔍 בודק מקור הסטרים לפי פרופורציות');
+    
+    // המתן עד שיש מידע על גודל הוידאו
+    const checkVideoSize = () => {
+      const { videoWidth, videoHeight } = videoElement;
+      
+      if (videoWidth && videoHeight) {
+        const ratio = videoWidth / videoHeight;
+        console.log(`📏 יחס וידאו: ${ratio.toFixed(3)} (${videoWidth}x${videoHeight})`);
 
-  v.autoplay = true;
-  v.playsInline = true;
-  v.controls = true;
-  // keep muted for autoplay compliance; audio can be toggled by user
-  v.muted = true;
-
-    v.onloadedmetadata = () => {
-      console.log('🎥 loadedmetadata', {
-        w: v.videoWidth, h: v.videoHeight, duration: v.duration,
-      });
+        // Thresholds per requirement: >=1.2 landscape, <=0.9 portrait (mobile), else square-ish
+        if (ratio >= 1.2) {
+          videoElement.setAttribute('data-source', 'landscape');
+          setStageMode('landscape');
+          console.log('🖥️ מקור: landscape');
+        } else if (ratio <= 0.9) {
+          videoElement.setAttribute('data-source', 'mobile');
+          setStageMode('portrait');
+          console.log('📱 מקור: portrait/mobile');
+        } else {
+          videoElement.setAttribute('data-source', 'square');
+          setStageMode('square');
+          console.log('◼️ מקור: square-ish');
+        }
+      }
     };
-    v.oncanplay = () => console.log('🎥 canplay');
-    v.onplay = () => console.log('🎥 playing');
-    v.onerror = (e) => console.error('🎥 video error', e);
+    
+    // בדיקה מיידית וגם לאחר טעינת מידע
+    checkVideoSize();
+    videoElement.addEventListener('loadedmetadata', checkVideoSize);
+  };
+  
+  // video element: initialize autoplay/inline and tag aspect on metadata
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.autoplay = true;
+    v.playsInline = true;
+    v.controls = false;
+  v.muted = false;
+    v.onloadedmetadata = () => {
+  console.log('🎥 loadedmetadata', { w: v.videoWidth, h: v.videoHeight, duration: v.duration, elSize: `${v.clientWidth}x${v.clientHeight}` });
+      detectStreamSource(v);
+      v.play().then(() => setNeedsGesture(false)).catch(() => setNeedsGesture(true));
+    };
   }, []);
 
   useEffect(() => {
@@ -65,7 +106,8 @@ export default function WatchStream() {
           return;
         }
 
-        const data = snap.data() as LiveStreamDoc;
+  let data = snap.data() as LiveStreamDoc;
+  data = normalizeLiveDoc(data);
         console.log('📡 Stream data updated:', data);
         setStreamData(data);
 
@@ -130,6 +172,26 @@ export default function WatchStream() {
         setIsConnected(true);
         setConnectionStatus('Connected to stream');
         cleanupRef.current = result.cleanup;
+        
+        // זיהוי מקור השידור (מובייל או אחר) לאחר חיבור מוצלח
+        if (el) {
+          // המתן לפרטי הוידאו ועדכן את הסגנון בהתאם
+          const checkSourceType = () => {
+            if (el.videoWidth && el.videoHeight) {
+              detectStreamSource(el);
+            } else {
+              // נסה שוב אם עדיין אין נתוני גודל
+              setTimeout(checkSourceType, 500);
+            }
+          };
+          
+          // המתן מעט לפני בדיקת הגודל כדי לאפשר קבלת מידע
+          setTimeout(checkSourceType, 1000);
+          // אם הווידאו במצב מושהה אחרי החיבור – נציג שכבת הפעלה
+          setTimeout(() => {
+            if (el.paused) setNeedsGesture(true); else setNeedsGesture(false);
+          }, 800);
+        }
       })
       .catch((err: any) => {
         console.error('❌ Failed to connect:', err);
@@ -140,6 +202,8 @@ export default function WatchStream() {
         connectingRef.current = false;
       });
   }, [id, videoReady, streamData?.status, isConnected]);
+
+  // Removed aggressive black-screen refresh loop; rely on stable attach and CSS
 
   const toggleFullscreen = () => {
     const el = containerRef.current || videoRef.current;
@@ -209,35 +273,110 @@ export default function WatchStream() {
 
       {/* Video */}
       <div className="flex justify-center mb-6">
-        <div ref={containerRef} className="relative w-full max-w-[320px] md:max-w-[360px] lg:max-w-[400px]">
-          <div className="aspect-[9/16] w-full rounded-lg overflow-hidden bg-black relative">
-           <video
-  ref={setVideoRef}
-  autoPlay
-  playsInline
-  controls
-  muted
-  className="w-full h-full object-contain bg-black"
-/>
+        <div ref={containerRef} className="ws-watch">
+          <div className="video-stage" data-mode={stageMode}>
+            {/* LIVE badge (kept minimal) */}
+            <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 3, background: 'red', color: '#fff', padding: '2px 8px', borderRadius: 4, fontSize: 12 }}>LIVE</div>
 
-            {/* Fullscreen toggle */}
+            {/* Video element */}
+            <video
+              ref={setVideoRef}
+              autoPlay
+              playsInline
+              className="video-el"
+              data-source="default"
+              onPlay={() => setNeedsGesture(false)}
+              onPause={() => setNeedsGesture(true)}
+            />
+
+            {/* Title overlay */}
+            {streamData && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'flex-end', padding: 16, background: 'linear-gradient(transparent, rgba(0,0,0,0.35) 70%)', color: '#fff', zIndex: 2 }}>
+                <div>
+                  <div className="text-lg font-bold">{streamData.title}</div>
+                  <div className="text-sm opacity-80">{streamData.displayName}</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Tap-to-play overlay */}
+          {needsGesture && (
+            <button
+              type="button"
+              onClick={() => {
+                const v = videoRef.current; if (!v) return;
+                v.muted = false; setMuted(false);
+                // Attempt to start hidden audio element too
+                try { const au = document.getElementById(`viewer-audio-${id}`) as HTMLAudioElement | null; if (au) { (au as any).muted = false; au.play().catch(() => {}); } } catch {}
+                v.play().then(() => setNeedsGesture(false)).catch(() => setNeedsGesture(true));
+              }}
+              style={{ position: 'absolute', inset: 0, zIndex: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(transparent, rgba(0,0,0,0.35))' }}
+              aria-label="הפעל עם שמע"
+            >
+              <span style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', padding: '10px 14px', borderRadius: 9999, fontWeight: 700 }}>הקש כדי להפעיל עם שמע</span>
+            </button>
+          )}
+
+          {/* Actions rail */}
+          <div style={{ position: 'absolute', right: 12, bottom: 80, zIndex: 4, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* כפתור מסך מלא */}
             <button
               type="button"
               onClick={toggleFullscreen}
-              className="absolute top-2 right-2 z-10 px-2 py-1 text-xs rounded bg-black/60 text-white hover:bg-black/80"
-              aria-label="Toggle fullscreen"
+              className="flex flex-col items-center"
+              aria-label="מסך מלא"
             >
-              Fullscreen
+              <div className="w-12 h-12 flex items-center justify-center bg-black/50 rounded-full backdrop-blur-sm mb-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                </svg>
+              </div>
+              <span className="text-white text-xs">מסך מלא</span>
             </button>
-
+            {/* mute/unmute toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                const v = videoRef.current; if (!v) return; v.muted = !v.muted; setMuted(v.muted);
+                const au = document.getElementById(`viewer-audio-${id}`) as HTMLAudioElement | null; if (au) { try { (au as any).muted = v.muted; } catch {} }
+                // if unmuting requires a user gesture, this click is the gesture
+                if (!v.muted) v.play().catch(() => {});
+              }}
+              className="flex flex-col items-center"
+              aria-label={muted ? 'בטל השתקה' : 'השתקה'}
+            >
+              <div className="w-12 h-12 flex items-center justify-center bg-black/50 rounded-full backdrop-blur-sm mb-1">
+                {muted ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 9v6l-4-4h-2v-2h2l4-4z" />
+                    <path d="M15 9l6 6" /><path d="M21 9l-6 6" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 9v6l-4-4h-2v-2h2l4-4z" />
+                    <path d="M15 9a5 5 0 0 1 0 6" />
+                    <path d="M18 6a9 9 0 0 1 0 12" />
+                  </svg>
+                )}
+              </div>
+              <span className="text-white text-xs">{muted ? 'בטל השתקה' : 'השתקה'}</span>
+            </button>
           </div>
         </div>
       </div>
 
+      {/* Co-host request */}
+      {id && (
+        <div className="flex justify-center mb-8">
+          <RequestToJoinButton liveId={id!} />
+        </div>
+      )}
+
       {/* Debug Info */}
       <div className="mt-6 p-3 bg-gray-800 rounded text-xs text-gray-300">
         <div>Stream ID: {id}</div>
-        <div>Status: {streamData.status}</div>
+        <div>Status: {streamData?.status}</div>
         <div>Connected: {isConnected ? 'Yes' : 'No'}</div>
         <div>Connection Status: {connectionStatus}</div>
         <div>Video Element: {videoRef.current ? 'Ready' : 'Not Ready'}</div>
@@ -245,7 +384,7 @@ export default function WatchStream() {
         <div>
           Video Tracks:{' '}
           {videoRef.current?.srcObject
-            ? (videoRef.current.srcObject as MediaStream)?.getTracks().length || 0
+            ? (videoRef.current?.srcObject as MediaStream)?.getTracks().length || 0
             : 0}
         </div>
       </div>

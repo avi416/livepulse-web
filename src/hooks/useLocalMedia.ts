@@ -30,6 +30,7 @@ export function useLocalMedia(): UseLocalMedia {
   }, []);
 
   const stop = useCallback(() => {
+    // Keep this helper, but ensure callers only invoke when they truly want to stop local media
     if (stream) {
       stream.getTracks().forEach((t) => t.stop());
     }

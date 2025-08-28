@@ -2,12 +2,12 @@ import { useEffect } from 'react';
 import '../../styles/components/FeedList.css';
 import LiveCard from './LiveCard';
 import type { Live } from '../../types/live';
-import { useInfiniteLives } from '../../hooks/useInfiniteLives';
+import { useLiveVerticalStreams } from '../../hooks/useLiveVerticalStreams';
 import { useFeedSnap } from '../../hooks/useFeedSnap';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 
 export default function FeedList({ filterFollowed = false }: { filterFollowed?: boolean }) {
-  const { items, loadMore, hasMore } = useInfiniteLives();
+  const { items } = useLiveVerticalStreams();
   const { containerRef, activeIndex: _activeIndex, next, prev } = useFeedSnap();
 
   // keyboard shortcuts: arrows to navigate, M to mute (noop here)
@@ -15,16 +15,10 @@ export default function FeedList({ filterFollowed = false }: { filterFollowed?: 
 
   const filtered: Live[] = filterFollowed ? items.filter((l: Live) => !!l.isFollowed) : items;
 
+  // No infinite paging for realtime feed; keep container snapping behavior only.
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const sentinel = el.querySelector('#feed-end');
-    const obs = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) loadMore();
-    }, { root: el, rootMargin: '400px' });
-    if (sentinel) obs.observe(sentinel);
-    return () => obs.disconnect();
-  }, [containerRef, loadMore, hasMore]);
+    // Ensure ref exists to enable snapping styles; no observer needed.
+  }, [containerRef]);
 
   return (
     <div ref={containerRef} className="feedContainer h-[calc(100vh-4rem)] snap-y snap-mandatory overflow-auto" aria-label="feed">
@@ -41,7 +35,7 @@ export default function FeedList({ filterFollowed = false }: { filterFollowed?: 
           </div>
         </div>
       ))}
-      <div id="feed-end" className="h-24" />
+  <div id="feed-end" className="h-24" />
     </div>
   );
 }
