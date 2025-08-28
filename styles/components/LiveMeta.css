@@ -1,6 +1,0 @@
-/* LiveMeta styles */
-.meta{max-width:70%}
-.meta .handle{color:var(--muted);font-size:13px}
-.meta .title{font-weight:700;font-size:18px}
-.meta .tags{display:flex;gap:8px;margin-top:8px}
-.meta .tag{background:rgba(14,165,233,0.08);color:var(--accent);padding:4px 8px;border-radius:999px;font-size:12px}

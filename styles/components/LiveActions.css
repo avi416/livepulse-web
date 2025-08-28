@@ -1,5 +1,0 @@
-/* LiveActions styles */
-.actions{display:flex;flex-direction:column;gap:10px;align-items:center}
-.actions button{width:44px;height:44px;border-radius:999px;background:rgba(255,255,255,0.9);border:1px solid rgba(14,165,233,0.08)}
-.actions button{transition:transform .14s ease, box-shadow .14s ease}
-.actions button:hover{transform:translateY(-4px);box-shadow:0 8px 18px rgba(10,132,255,0.12)}
