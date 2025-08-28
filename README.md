@@ -87,3 +87,4 @@ VITE_TURN_CREDENTIAL=turnPass
 Notes:
 - Signaling collections live under `liveStreams/{id}/sdp/{offer|answer}` and ICE in `candidates_broadcaster`/`candidates_viewers`.
 - The app automatically handles ICE restarts and renegotiation.
+- On mobile networks, if the viewer still can't connect, try enabling `VITE_FORCE_RELAY_FOR_BROADCASTER=true` so both sides use TURN relay.

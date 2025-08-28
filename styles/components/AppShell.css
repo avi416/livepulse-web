@@ -1,0 +1,4 @@
+/* AppShell styles */
+.appShell{min-height:100vh;background:var(--bg);color:var(--text)}
+
+.appShell .sideCard{border-radius:12px;padding:8px}

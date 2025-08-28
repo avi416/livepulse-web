@@ -1,0 +1,126 @@
+import { useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { createUserWithEmailAndPassword, signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getAuthInstance, getFirestoreInstance, googleProvider } from '../services/firebase';
+
+export default function Register() {
+  const navigate = useNavigate();
+  const auth = getAuthInstance();
+  const db = getFirestoreInstance();
+
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      const user = cred.user;
+      await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        name: name || user.displayName || '',
+        email: user.email || email,
+        role: 'user',
+        createdAt: serverTimestamp(),
+      });
+      navigate('/');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function prefersRedirect(): boolean {
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/.test(ua);
+    const isMobile = isIOS || isAndroid || window.innerWidth < 768;
+    return isMobile;
+  }
+
+  async function handleGoogle() {
+    setError(null);
+    setLoading(true);
+    try {
+      const res = prefersRedirect()
+        ? (await signInWithRedirect(auth, googleProvider), null)
+        : await signInWithPopup(auth, googleProvider);
+      if (!res) return; // redirect flow continues on callback
+      const user = res.user;
+      const nameFromProvider = user.displayName ?? (user.email ? user.email.split('@')[0] : '');
+      await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        name: nameFromProvider,
+        email: user.email,
+        role: 'user',
+        createdAt: serverTimestamp(),
+      }, { merge: true });
+      navigate('/');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
+      <div className="w-full max-w-md p-6 rounded-lg bg-[var(--panel)] shadow-md">
+        <h2 className="text-2xl font-semibold mb-4 text-white">Create account</h2>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Full name"
+            className="w-full rounded-md px-3 py-2 bg-transparent border border-slate-700 text-white placeholder:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--primary)]"
+            required
+          />
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            type="email"
+            className="w-full rounded-md px-3 py-2 bg-transparent border border-slate-700 text-white placeholder:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--primary)]"
+            required
+          />
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            type="password"
+            className="w-full rounded-md px-3 py-2 bg-transparent border border-slate-700 text-white placeholder:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--primary)]"
+            required
+          />
+
+          {error && <div className="text-red-400 text-sm">{error}</div>}
+
+          <button type="submit" disabled={loading} className="w-full bg-[color:var(--primary)] text-black font-semibold py-2 rounded-md">
+            {loading ? 'Creating...' : 'Create account'}
+          </button>
+        </form>
+
+        <div className="my-3 border-t border-white/10" />
+
+        <button onClick={handleGoogle} className="w-full flex items-center justify-center gap-2 border border-white/10 rounded-md py-2 text-white">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21.35 11.1H12v2.8h5.35c-.23 1.34-1.01 2.49-2.16 3.27v2.7h3.49C20.66 19.1 22 15.4 22 12c0-.67-.07-1.32-.2-1.9z" fill="#4285F4"/><path d="M12 22c2.7 0 4.97-.9 6.63-2.43l-3.49-2.7c-.97.66-2.21 1.06-3.14 1.06-2.41 0-4.45-1.63-5.18-3.82H3.14v2.4C4.8 19.8 8.12 22 12 22z" fill="#34A853"/><path d="M6.82 13.11A6.99 6.99 0 016 12c0-.66.11-1.3.32-1.9V7.7H3.14A9.99 6.99 0 002 12c0 1.6.36 3.12 1.02 4.44l3.8-3.33z" fill="#FBBC05"/><path d="M12 6.5c1.47 0 2.8.5 3.85 1.47l2.88-2.88C16.96 3.73 14.7 3 12 3 8.12 3 4.8 5.2 3.14 8.3l3.18 2.2C7.55 8.13 9.59 6.5 12 6.5z" fill="#EA4335"/></svg>
+          Sign up with Google
+        </button>
+
+        <div className="text-xs text-white/60 mt-2">
+          Tip: On mobile we use redirect for Google sign-up. Ensure the domain is authorized in Firebase Auth → Settings → Authorized domains.
+        </div>
+
+        <p className="text-sm text-white/80 mt-3">Already have an account? <Link to="/login" className="text-[color:var(--primary)]">Login</Link></p>
+      </div>
+    </div>
+  );
+}
