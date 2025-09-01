@@ -1,0 +1,576 @@
+// src/services/webrtcService.ts
+import { doc, getDoc, onSnapshot, collection, addDoc, setDoc } from 'firebase/firestore';
+import { getFirestoreInstance } from './firebase';
+import { getAuth } from 'firebase/auth';
+
+function buildIceServers(): RTCIceServer[] {
+  const servers: RTCIceServer[] = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+  ];
+
+  // Optional TURN from Vite env
+  const turnUrl = (import.meta as any).env?.VITE_TURN_URL as string | undefined;
+  const turnUser = (import.meta as any).env?.VITE_TURN_USERNAME as string | undefined;
+  const turnCred = (import.meta as any).env?.VITE_TURN_CREDENTIAL as string | undefined;
+  if (turnUrl && turnUser && turnCred) {
+    servers.push({ urls: turnUrl, username: turnUser, credential: turnCred });
+  }
+  return servers;
+}
+
+function getRtcConfig(role: 'broadcaster' | 'viewer'): RTCConfiguration {
+  const env = (import.meta as any).env || {};
+  const forceRelayViewer = (env.VITE_FORCE_RELAY_FOR_VIEWER || 'false') === 'true';
+  const forceRelayBroadcaster = (env.VITE_FORCE_RELAY_FOR_BROADCASTER || 'false') === 'true';
+  const config: RTCConfiguration = {
+    iceServers: buildIceServers(),
+    iceCandidatePoolSize: 10,
+  };
+
+  // Force ICE relay policy if configured
+  if (role === 'viewer' && forceRelayViewer) {
+    config.iceTransportPolicy = 'relay';
+    console.log('🧊 Forcing TURN relay for viewer');
+  } else if (role === 'broadcaster' && forceRelayBroadcaster) {
+    config.iceTransportPolicy = 'relay';
+    console.log('🧊 Forcing TURN relay for broadcaster');
+  }
+
+  return config;
+}
+
+// For consistency with Firefox, try to use H.264 where possible
+function preferH264IfConfigured(transceiver: RTCRtpTransceiver) {
+  try {
+    const useH264 = ((import.meta as any).env?.VITE_PREFER_H264 || 'false') === 'true';
+    if (!useH264) return;
+    
+    const params = transceiver.sender.getParameters();
+    if (!params.codecs) return;
+    
+    // Find H.264 codec
+    const h264Codec = params.codecs.find(codec => 
+      codec.mimeType.toLowerCase() === 'video/h264'
+    );
+    
+    if (h264Codec) {
+      // Move H.264 to front of array to give it preference
+      params.codecs = [
+        h264Codec,
+        ...params.codecs.filter(c => c !== h264Codec)
+      ];
+      transceiver.sender.setParameters(params);
+      console.log('🎬 Prioritized H.264 codec');
+    }
+  } catch (e) {
+    // Ignore errors, this is optional optimization
+    console.warn('Could not prioritize H.264:', e);
+  }
+}
+
+/**
+ * Create a broadcaster peer connection
+ * 
+ * This is used by the host to broadcast their stream to viewers
+ */
+export async function createBroadcasterPC(
+  liveId: string, 
+  stream: MediaStream
+): Promise<RTCPeerConnection> {
+  console.log('📡 Creating broadcaster PC for stream:', liveId);
+  
+  const db = getFirestoreInstance();
+  const auth = getAuth();
+  
+  if (!auth.currentUser) {
+    throw new Error('User must be logged in to broadcast');
+  }
+  
+  // Create a new peer connection with the ICE servers
+  const pc = new RTCPeerConnection(getRtcConfig('broadcaster'));
+  
+  // Add all tracks from our stream to the peer connection
+  stream.getTracks().forEach(track => {
+    const sender = pc.addTrack(track, stream);
+    
+    // Prefer H.264 for video tracks if enabled via env var
+    if (track.kind === 'video') {
+      try {
+        const transceiver = pc.getTransceivers().find(t => t.sender === sender);
+        if (transceiver) {
+          preferH264IfConfigured(transceiver);
+        }
+      } catch (e) {
+        console.warn('Could not get transceiver for H.264 preference:', e);
+      }
+    }
+  });
+  
+  // Create and set local description (offer)
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  
+  const offerWithTimestamp = {
+    ...offer,
+    created: new Date().toISOString()
+  };
+  
+  // Save the offer to Firestore
+  try {
+    await setDoc(
+      doc(db, 'liveStreams', liveId, 'sdp', 'offer'), 
+      offerWithTimestamp
+    );
+    console.log('✅ Broadcaster offer saved');
+  } catch (err) {
+    console.error('❌ Failed to save broadcaster offer:', err);
+    throw err;
+  }
+  
+  // Listen for ICE candidates from viewers and add them to our peer connection
+  const unsubViewerCandidates = onSnapshot(
+    collection(db, 'liveStreams', liveId, 'candidates_viewer'),
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const candidate = change.doc.data();
+          console.log('🧊 Adding viewer ICE candidate to broadcaster PC');
+          pc.addIceCandidate(new RTCIceCandidate(candidate));
+        }
+      });
+    }
+  );
+  
+  // When we generate ICE candidates, save them to Firestore for the viewers
+  pc.onicecandidate = async (event) => {
+    if (event.candidate) {
+      try {
+        await addDoc(
+          collection(db, 'liveStreams', liveId, 'candidates_broadcaster'),
+          event.candidate.toJSON()
+        );
+        console.log('🧊 Broadcaster ICE candidate saved');
+      } catch (err) {
+        console.error('❌ Failed to add broadcaster ICE candidate:', err);
+      }
+    }
+  };
+  
+  pc.onconnectionstatechange = () => {
+    console.log('🔗 Broadcaster connection state:', pc.connectionState);
+  };
+  
+  pc.oniceconnectionstatechange = () => {
+    console.log('🧊 Broadcaster ICE connection state:', pc.iceConnectionState);
+  };
+  
+  // Listen for the answer from viewers
+  const answerDoc = doc(db, 'liveStreams', liveId, 'sdp', 'answer');
+  
+  const unsubAnswer = onSnapshot(answerDoc, (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      if (data) {
+        console.log('✅ Received viewer answer, setting remote description');
+        pc.setRemoteDescription(new RTCSessionDescription(data))
+          .catch(err => console.error('❌ Error setting remote description:', err));
+      }
+    }
+  });
+  
+  // Attach cleanup function to the peer connection
+  (pc as any).cleanup = () => {
+    console.log('🧹 Cleaning up broadcaster PC');
+    try { unsubViewerCandidates(); } catch {}
+    try { unsubAnswer(); } catch {}
+    try { pc.close(); } catch {}
+  };
+  
+  return pc;
+}
+
+/**
+ * Host accepts a co-host connection
+ * Creates a recvonly PeerConnection to receive A/V from the co-host
+ */
+export async function hostAcceptCoHost(
+  liveId: string, 
+  coUid: string,
+  onRemoteTrack: (stream: MediaStream, uid: string) => void
+) {
+  console.log('🎥 Host accepting co-host:', coUid, 'for stream:', liveId);
+  
+  const db = getFirestoreInstance();
+  
+  // Create peer connection with ICE servers
+  const pc = new RTCPeerConnection(getRtcConfig('viewer'));
+  
+  // Ensure we will receive media even before first packets arrive
+  try { 
+    const t = pc.addTransceiver('video', { direction: 'recvonly' }); 
+    preferH264IfConfigured(t); 
+  } catch {}
+  try { 
+    pc.addTransceiver('audio', { direction: 'recvonly' }); 
+  } catch {}
+  
+  // Handle incoming tracks from co-host
+  const receivedTracks = new Set();
+  const cohostStream = new MediaStream();
+  
+  pc.ontrack = (e) => {
+    console.log('📡 Host received track from co-host:', e.track.kind, {
+      muted: e.track.muted,
+      readyState: e.track.readyState,
+      trackId: e.track.id,
+      streamId: e.streams?.[0]?.id || 'no-stream'
+    });
+    
+    // Track management strategy:
+    // 1. If the track is already in our set, ignore it (avoid duplicates)
+    // 2. Add the track to our managed stream
+    // 3. Call onRemoteTrack callback with our managed stream
+    
+    if (receivedTracks.has(e.track.id)) {
+      console.log('ℹ️ Already handling this track, ignoring duplicate event');
+      return;
+    }
+    
+    receivedTracks.add(e.track.id);
+    cohostStream.addTrack(e.track);
+    
+    if (typeof onRemoteTrack === 'function') {
+      onRemoteTrack(cohostStream, coUid);
+    }
+  };
+  
+  // Add ICE candidates from co-host to our peer connection
+  pc.onicecandidate = async (e) => {
+    if (e.candidate) {
+      try {
+        await addDoc(
+          collection(db, 'liveStreams', liveId, 'cohosts', coUid, 'candidates_broadcaster'),
+          e.candidate.toJSON()
+        );
+        console.log('🧊 Host ICE candidate sent to co-host');
+      } catch (err) {
+        console.error('❌ Failed to add host ICE candidate for co-host:', err);
+      }
+    }
+  };
+  
+  // Get the offer from co-host - with improved waiting logic
+  const offerRef = doc(db, 'liveStreams', liveId, 'cohosts', coUid, 'sdp', 'offer');
+  
+  // First try - immediate check
+  let offerSnap = await getDoc(offerRef);
+  
+  // If not found, we'll set up a listener and wait for the offer to appear
+  if (!offerSnap.exists()) {
+    console.warn('ℹ️ Co-host offer not found yet, setting up listener to wait for it...');
+    console.log(`📋 Looking for offer at: liveStreams/${liveId}/cohosts/${coUid}/sdp/offer`);
+    
+    // Wait for up to 15 seconds for the offer to appear
+    try {
+      const offerResult = await new Promise<any>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Timed out waiting for co-host offer'));
+        }, 15000);
+        
+        const unsubscribe = onSnapshot(offerRef, (snapshot: any) => {
+          if (snapshot.exists()) {
+            clearTimeout(timeout);
+            unsubscribe();
+            console.log('✅ Co-host offer received via listener');
+            resolve(snapshot);
+          }
+        }, (error: Error) => {
+          clearTimeout(timeout);
+          reject(error);
+        });
+      });
+      
+      // Update our snapshot with the one from the listener
+      offerSnap = offerResult;
+    } catch (error: any) {
+      console.error('❌ Error waiting for co-host offer:', error);
+      throw new Error(`Co-host offer not found: ${error.message}`);
+    }
+    
+    if (!offerSnap.exists()) {
+      throw new Error('Co-host offer still not found after waiting');
+    }
+    console.log('✅ Co-host offer received after waiting');
+  } else {
+    console.log('✅ Co-host offer found immediately');
+  }
+  
+  // Set remote description with the offer we got
+  const offer = offerSnap.data();
+  
+  // Set remote description (offer from co-host)
+  await pc.setRemoteDescription(new RTCSessionDescription(offer));
+  
+  // Create answer
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  
+  try {
+    await setDoc(
+      doc(db, 'liveStreams', liveId, 'cohosts', coUid, 'sdp', 'answer'), 
+      answer
+    );
+    console.log('✅ Host answer saved for co-host');
+  } catch (err) {
+    console.error('❌ Failed to save answer for co-host:', err);
+    throw err;
+  }
+  
+  // Listen for ICE candidates from co-host
+  const unsubCoHostICE = onSnapshot(
+    collection(db, 'liveStreams', liveId, 'cohosts', coUid, 'candidates_cohost'),
+    (snap: any) => {
+      snap.docChanges().forEach((change: any) => {
+        if (change.type === 'added') {
+          const c = change.doc.data();
+          console.log('🧊 Adding co-host ICE candidate:', c.candidate);
+          pc.addIceCandidate(new RTCIceCandidate(c)).catch((err: Error) => {
+            console.error('❌ Failed to add co-host ICE candidate:', err);
+          });
+        }
+      });
+    },
+  );
+  
+  // Connection state change logs
+  pc.onconnectionstatechange = () => {
+    console.log('🔗 Host connection state for co-host:', pc.connectionState);
+  };
+  
+  // ICE connection state change logs
+  pc.oniceconnectionstatechange = () => {
+    console.log('🧊 Host ICE state for co-host:', pc.iceConnectionState);
+  };
+  
+  const cleanup = () => {
+    try { unsubCoHostICE(); } catch {}
+    try { pc.close(); } catch {}
+  };
+  
+  return { pc, cleanup };
+}
+
+// rest of your file continues...
+
+/**
+ * Create a broadcaster peer connection
+ * This is used by the host to broadcast their stream
+ */
+export async function createBroadcasterPC(
+  liveId: string,
+  localStream: MediaStream
+): Promise<{
+  pc: RTCPeerConnection;
+  unsubAnswer: () => void;
+  unsubViewerICE: () => void;
+}> {
+  console.log('🎬 Creating broadcaster PC for stream:', liveId);
+  const db = getFirestoreInstance();
+  
+  // Create peer connection with ICE servers
+  const pc = new RTCPeerConnection(getRtcConfig('broadcaster'));
+  
+  // Add all tracks from local stream to the peer connection
+  localStream.getTracks().forEach(track => {
+    console.log('➕ Adding track to broadcaster PC:', track.kind, track.id);
+    pc.addTrack(track, localStream);
+  });
+  
+  // Handle ICE candidates
+  pc.onicecandidate = async (e) => {
+    if (e.candidate) {
+      try {
+        await addDoc(
+          collection(db, 'liveStreams', liveId, 'candidates'),
+          e.candidate.toJSON()
+        );
+        console.log('🧊 ICE candidate sent to server:', e.candidate.candidate.substring(0, 20) + '...');
+      } catch (err) {
+        console.error('❌ Failed to add ICE candidate:', err);
+      }
+    }
+  };
+  
+  // Create and set local description (offer)
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  
+  // Save the offer to Firestore
+  try {
+    await setDoc(doc(db, 'liveStreams', liveId, 'sdp', 'offer'), offer);
+    console.log('✅ Broadcaster offer saved');
+  } catch (err) {
+    console.error('❌ Failed to save offer:', err);
+    throw err;
+  }
+  
+  // Listen for answer from viewers
+  const unsubAnswer = onSnapshot(
+    doc(db, 'liveStreams', liveId, 'sdp', 'answer'),
+    async (snapshot) => {
+      if (snapshot.exists()) {
+        const answer = snapshot.data();
+        try {
+          if (pc.currentRemoteDescription === null) {
+            console.log('📝 Setting remote description for broadcaster');
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          }
+        } catch (err) {
+          console.error('❌ Error setting remote description:', err);
+        }
+      }
+    },
+    (err) => {
+      console.error('❌ Error getting answer:', err);
+    }
+  );
+  
+  // Listen for ICE candidates from viewers
+  const unsubViewerICE = onSnapshot(
+    collection(db, 'liveStreams', liveId, 'candidates_viewer'),
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          console.log('🧊 Adding viewer ICE candidate');
+          pc.addIceCandidate(new RTCIceCandidate(data)).catch(err => {
+            console.error('❌ Failed to add viewer ICE candidate:', err);
+          });
+        }
+      });
+    },
+    (err) => {
+      console.error('❌ Error getting viewer ICE candidates:', err);
+    }
+  );
+  
+  // Connection state change logs
+  pc.onconnectionstatechange = () => {
+    console.log('🔗 Broadcaster connection state:', pc.connectionState);
+  };
+  
+  // ICE connection state change logs
+  pc.oniceconnectionstatechange = () => {
+    console.log('🧊 Broadcaster ICE state:', pc.iceConnectionState);
+  };
+  
+  return { pc, unsubAnswer, unsubViewerICE };
+}
+
+/**
+ * Join a live stream as a viewer
+ */
+export async function watcherJoin(
+  liveId: string,
+  remoteVideo: HTMLVideoElement
+): Promise<{ pc: RTCPeerConnection; cleanup: () => void }> {
+  console.log('👁️ Joining stream as viewer:', liveId);
+  const db = getFirestoreInstance();
+  
+  // Create peer connection with ICE servers
+  const pc = new RTCPeerConnection(getRtcConfig('viewer'));
+  
+  // Set up remote stream handling
+  pc.ontrack = (e) => {
+    console.log('📺 Received track from broadcaster:', e.track.kind);
+    
+    if (remoteVideo) {
+      // If a stream is already set, avoid resetting
+      if (!remoteVideo.srcObject) {
+        console.log('🔗 Setting remote video source');
+        remoteVideo.srcObject = e.streams[0];
+      }
+    } else {
+      console.warn('⚠️ Remote video element not available');
+    }
+  };
+  
+  // Handle ICE candidates
+  pc.onicecandidate = async (e) => {
+    if (e.candidate) {
+      try {
+        await addDoc(
+          collection(db, 'liveStreams', liveId, 'candidates_viewer'),
+          e.candidate.toJSON()
+        );
+        console.log('🧊 Viewer ICE candidate sent');
+      } catch (err) {
+        console.error('❌ Failed to add viewer ICE candidate:', err);
+      }
+    }
+  };
+  
+  // Connection state change logs
+  pc.onconnectionstatechange = () => {
+    console.log('🔗 Viewer connection state:', pc.connectionState);
+  };
+  
+  // ICE connection state change logs
+  pc.oniceconnectionstatechange = () => {
+    console.log('🧊 Viewer ICE state:', pc.iceConnectionState);
+  };
+  
+  // Get the offer from Firestore
+  try {
+    const offerDoc = await getDoc(doc(db, 'liveStreams', liveId, 'sdp', 'offer'));
+    
+    if (!offerDoc.exists()) {
+      throw new Error('No offer found. The stream may not be live yet.');
+    }
+    
+    const offer = offerDoc.data();
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    
+    // Create answer
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    
+    // Save the answer to Firestore
+    await setDoc(doc(db, 'liveStreams', liveId, 'sdp', 'answer'), answer);
+    console.log('✅ Viewer answer saved');
+  } catch (err) {
+    console.error('❌ Error joining stream:', err);
+    throw err;
+  }
+  
+  // Listen for ICE candidates from broadcaster
+  const unsubBroadcasterICE = onSnapshot(
+    collection(db, 'liveStreams', liveId, 'candidates'),
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          console.log('🧊 Adding broadcaster ICE candidate');
+          pc.addIceCandidate(new RTCIceCandidate(data)).catch(err => {
+            console.error('❌ Failed to add broadcaster ICE candidate:', err);
+          });
+        }
+      });
+    },
+    (err) => {
+      console.error('❌ Error getting broadcaster ICE candidates:', err);
+    }
+  );
+  
+  // Cleanup function
+  const cleanup = () => {
+    try { unsubBroadcasterICE(); } catch {}
+    try { pc.close(); } catch {}
+  };
+  
+  return { pc, cleanup };
+}
