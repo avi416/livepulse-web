@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { subscribeToRequests, updateJoinRequestStatus } from '../../services/streamService';
-import type { JoinRequestDoc, JoinRequestStatus } from '../../types/cohost';
+import type { JoinRequestDoc } from '../../types/cohost';
 
 interface RequestsPanelProps {
   liveId: string;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createOrUpdateJoinRequest, subscribeToCurrentUserRequest } from '../../services/streamService';
 import { useAuth } from '../../contexts/AuthContext';
-import type { JoinRequestDoc, JoinRequestStatus } from '../../types/cohost';
+import type { JoinRequestStatus } from '../../types/cohost';
 
 interface RequestToJoinButtonProps {
   liveId: string;

@@ -1,4 +1,4 @@
-import { LiveStreamDoc } from '../services/streamService';
+import type { LiveStreamDoc } from '../services/streamService';
 import { useAuth } from '../contexts/AuthContext';
 
 /**

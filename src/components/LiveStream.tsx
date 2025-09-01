@@ -12,7 +12,6 @@ export default function LiveStream() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isLive, setIsLive] = useState(false);
   const [streamId, setStreamId] = useState<string | null>(null);
-  const [liveDoc, setLiveDoc] = useState<any>(null);
   const [cohosts, setCohosts] = useState<CoHostConnection[]>([]);
   const [coHostConnections, setCoHostConnections] = useState<Map<string, any>>(new Map());
   const broadcasterRef = useRef<null | { pc: RTCPeerConnection; unsubAnswer?: () => void; unsubViewerICE?: () => void; stream?: MediaStream }>(null);
@@ -34,7 +33,6 @@ export default function LiveStream() {
       try {
         const doc = await getStreamById(streamId);
         console.log('🎯 Live doc fetched:', doc);
-        setLiveDoc(doc);
         
         // Important debug
         console.log('⚠️ DEBUG: Setting liveDoc - This confirms we have stream data');
@@ -114,10 +112,19 @@ export default function LiveStream() {
       console.log(`🤝 Host accepting co-host: ${uid}`);
       
       // Accept the co-host connection
-      const { pc, cleanup } = await hostAcceptCoHost(streamId, uid, (stream, coUid) => {
-        console.log(`📡 Received co-host stream from ${coUid}`, {
+      const { pc, cleanup } = await hostAcceptCoHost(
+        streamId as string,
+        broadcasterRef.current.stream as MediaStream,
+        document.createElement('video'),
+        uid
+      );
+      
+      // Add a callback for remote tracks
+      pc.ontrack = (event) => {
+        const stream = event.streams[0];
+        console.log(`📡 Received co-host stream from ${uid}`, {
           stream: stream ? "valid stream" : "missing stream",
-          tracks: stream?.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, muted: t.muted })) || []
+          tracks: stream?.getTracks().map((t: MediaStreamTrack) => ({ kind: t.kind, enabled: t.enabled, muted: t.muted })) || []
         });
         
         // Verify that we've received valid tracks
@@ -127,20 +134,20 @@ export default function LiveStream() {
         
         // Add to mixer if enabled
         if (ENABLE_MIXER) {
-          addCoHostStream(coUid, stream);
+          addCoHostStream(uid, stream);
         }
         
         // Create new stream object to ensure it's properly handled
         const cohostStream = new MediaStream();
-        stream.getTracks().forEach(track => {
+        stream.getTracks().forEach((track: MediaStreamTrack) => {
           cohostStream.addTrack(track);
         });
         
         // Update co-hosts state with the new stream
         setCohosts(prev => {
           const newCohosts = [
-            ...prev.filter(c => c.uid !== coUid),
-            { uid: coUid, peerConnection: pc, stream: cohostStream, isMuted: false }
+            ...prev.filter(c => c.uid !== uid),
+            { uid: uid, peerConnection: pc, stream: cohostStream, isMuted: false }
           ];
           console.log(`✅ Updated cohosts list: ${newCohosts.length} co-hosts`, 
             newCohosts.map(c => ({ 
@@ -157,7 +164,7 @@ export default function LiveStream() {
           console.log("🔄 Forcing UI refresh for co-host display");
           setCohosts(current => [...current]);
         }, 500);
-      });
+      };
       
       // Store the connection for later cleanup
       setCoHostConnections(prev => {

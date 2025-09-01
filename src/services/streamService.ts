@@ -11,8 +11,6 @@ import {
   where,
   orderBy,
   onSnapshot,
-  Timestamp,
-  limit,
   writeBatch
 } from 'firebase/firestore';
 import { getFirestoreInstance } from './firebase';
