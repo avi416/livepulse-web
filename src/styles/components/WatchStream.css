@@ -1,3 +1,0 @@
-/* DEPRECATED: Video layout moved to styles/components/watch-video.css (.ws-watch namespace).
-  This file intentionally left without video/container rules to prevent cascade conflicts.
-  If you need overlay UI, scope it locally within components or under .ws-watch. */
