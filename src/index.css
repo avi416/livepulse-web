@@ -1,0 +1,49 @@
+@import './styles/tiktok.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+	--bg: #121212; /* dark background */
+	--panel: #1e1e1e; /* panel background */
+	--muted: #6b7280; /* muted text */
+	--primary: #ff0000; /* bright red */
+	--accent: #e60000; /* darker red */
+	--text: #ffffff; /* white text */
+}
+
+html, body, #root {
+	height: 100%;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+}
+
+.card {
+	background: var(--panel);
+	border-radius: 12px;
+	box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+}
+
+/* dark theme - now using black and red */
+:root[data-theme='dark'] {
+	--bg: #121212;
+	--panel: #1e1e1e;
+	--muted: #6b7280;
+	--primary: #ff0000;
+	--accent: #e60000;
+	--text: #ffffff;
+	color-scheme: dark;
+}
+
+.live-take-title {
+	font-size: 28px;
+	font-weight: bold;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+}
+
+
