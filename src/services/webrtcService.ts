@@ -107,15 +107,15 @@ export async function createBroadcasterPC(
       muted: videoTrack.muted,
       readyState: videoTrack.readyState,
     });
-    // Ensure only one video sender; reuse existing transceiver if present
-    let vTrans = pc.getTransceivers().find((t) => t.sender.track?.kind === 'video' || t.receiver.track?.kind === 'video');
+    // Ensure single transceiver for video (sendonly)
+    let vTrans = pc.getTransceivers().find((t) => t.sender?.track?.kind === 'video' || t.receiver?.track?.kind === 'video');
     if (!vTrans) {
       try { vTrans = pc.addTransceiver('video', { direction: 'sendonly' }); } catch {}
+    } else {
+      try { vTrans.direction = 'sendonly'; } catch {}
     }
-    const sender = vTrans?.sender || pc.addTrack(videoTrack, stream);
-    try { await sender.replaceTrack(videoTrack); } catch {}
-    // try set H264 preference on sender transceiver if available
-    try { preferH264IfConfigured((sender as any).transport?._transceiver || (pc.getTransceivers().find(t => t.sender === sender) as RTCRtpTransceiver)); } catch {}
+    try { preferH264IfConfigured(vTrans as RTCRtpTransceiver); } catch {}
+    try { await (vTrans as RTCRtpTransceiver).sender.replaceTrack(videoTrack); } catch {}
   } else {
     console.warn('⚠️ No local VIDEO track found');
   }
@@ -126,13 +126,14 @@ export async function createBroadcasterPC(
       muted: audioTrack.muted,
       readyState: audioTrack.readyState,
     });
-    // Ensure only one audio sender; reuse existing transceiver if present
-    let aTrans = pc.getTransceivers().find((t) => t.sender.track?.kind === 'audio' || t.receiver.track?.kind === 'audio');
+    // Ensure single transceiver for audio (sendonly)
+    let aTrans = pc.getTransceivers().find((t) => t.sender?.track?.kind === 'audio' || t.receiver?.track?.kind === 'audio');
     if (!aTrans) {
       try { aTrans = pc.addTransceiver('audio', { direction: 'sendonly' }); } catch {}
+    } else {
+      try { aTrans.direction = 'sendonly'; } catch {}
     }
-    const aSender = aTrans?.sender || pc.addTrack(audioTrack, stream);
-    try { await aSender.replaceTrack(audioTrack); } catch {}
+    try { await (aTrans as RTCRtpTransceiver).sender.replaceTrack(audioTrack); } catch {}
   } else {
     console.warn('⚠️ No local AUDIO track found');
   }
@@ -521,10 +522,16 @@ export async function hostAcceptCoHost(
   };
   
   // Ensure sendrecv transceivers
-  const vT = pc.addTransceiver('video', { direction: 'sendrecv' });
-  const aT = pc.addTransceiver('audio', { direction: 'sendrecv' });
-  try { preferH264IfConfigured(vT); } catch {}
-  try { preferH264IfConfigured(vT); } catch {}
+  const ensureTransceiver = (kind: 'video' | 'audio') => {
+    let t = pc.getTransceivers().find((tr) =>
+      (tr.sender && (tr.sender.track?.kind === kind || tr.mid)) ||
+      (tr.receiver && tr.receiver.track?.kind === kind)
+    );
+    if (!t) t = pc.addTransceiver(kind, { direction: 'sendrecv' });
+    else try { t.direction = 'sendrecv'; } catch {}
+    try { if (kind === 'video') preferH264IfConfigured(t as RTCRtpTransceiver); } catch {}
+    return t as RTCRtpTransceiver;
+  };
 
   // Attach host local tracks (host preview stays connected directly to localStream via UI)
   const v = localStream.getVideoTracks()[0];
@@ -535,7 +542,7 @@ export async function hostAcceptCoHost(
         console.warn('[hostPC] video track not live:', (v as MediaStreamTrack).readyState);
       }
       (v as MediaStreamTrack).enabled = true;
-      await vT.sender.replaceTrack(v);
+      await ensureTransceiver('video').sender.replaceTrack(v);
     } catch (e) { console.warn('replaceTrack(video) failed', e); }
   }
   if (a) {
@@ -544,7 +551,7 @@ export async function hostAcceptCoHost(
         console.warn('[hostPC] audio track not live:', (a as MediaStreamTrack).readyState);
       }
       (a as MediaStreamTrack).enabled = true;
-      await aT.sender.replaceTrack(a);
+      await ensureTransceiver('audio').sender.replaceTrack(a);
     } catch (e) { console.warn('replaceTrack(audio) failed', e); }
   }
   logSenders('after attach local (sendrecv)');
@@ -587,8 +594,7 @@ export async function hostAcceptCoHost(
     el.muted = true; // allow autoplay; provide separate UI to unmute if needed
     try { el.removeAttribute('controls'); } catch {}
     try {
-      if (!el.style.width) el.style.width = '360px';
-      el.style.maxWidth = '100%';
+      el.style.width = '100%';
       el.style.objectFit = 'contain';
     } catch {}
 

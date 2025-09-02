@@ -24,9 +24,10 @@ export default function HostCohostPanel({
     if (!cohostVideoRef.current) return;
     cohostVideoRef.current.autoplay = true;
     cohostVideoRef.current.playsInline = true;
-  cohostVideoRef.current.muted = true; // allow autoplay; can unmute via UI if needed
-  try { cohostVideoRef.current.removeAttribute('controls'); } catch {}
+    cohostVideoRef.current.muted = true; // allow autoplay; can unmute via UI if needed
+    try { cohostVideoRef.current.removeAttribute('controls'); } catch {}
     cohostVideoRef.current.style.objectFit = "contain";
+    cohostVideoRef.current.style.width = '100%';
   }, []);
 
   // keep muted state in sync with element
@@ -96,7 +97,13 @@ export default function HostCohostPanel({
     <div className="host-cohost-panel p-3 rounded-md border border-blue-200 bg-white">
       <h3 className="font-semibold mb-2">Co-Host Panel</h3>
       <div className="video-tile mb-2">
-        <video ref={cohostVideoRef} style={{ width: 360, borderRadius: 12 }} />
+        <video
+          ref={cohostVideoRef}
+          autoPlay
+          playsInline
+          muted
+          style={{ width: '100%', borderRadius: 12, objectFit: 'contain' }}
+        />
       </div>
       <div className="flex items-center gap-2">
         <span className="text-sm text-gray-600">Status: {status}</span>
