@@ -1005,6 +1005,7 @@ export async function coHostJoinStream(
   
   // Ensure sendrecv transceivers
   const vT = pc.addTransceiver('video', { direction: 'sendrecv' });
+  try { preferH264IfConfigured(vT); } catch {}
   const aT = pc.addTransceiver('audio', { direction: 'sendrecv' });
 
   // Attach local co-host tracks
@@ -1075,6 +1076,12 @@ export async function coHostJoinStream(
     el.playsInline = true;
     el.muted = true; // allow autoplay; can show unmute button in UI
     try { el.removeAttribute('controls'); } catch {}
+    try {
+      el.style.objectFit = 'contain';
+      if (!el.style.width) el.style.width = '100%';
+      if (!el.style.maxWidth) el.style.maxWidth = '480px';
+      if (!el.style.minHeight) el.style.minHeight = '1px'; // avoid 0px collapse
+    } catch {}
 
     const tryPlay = () => el.play().catch(() => {
       const resume = () => { el.play().catch(() => {}); cleanup(); };
@@ -1083,10 +1090,10 @@ export async function coHostJoinStream(
     });
     tryPlay();
 
-    // log track counts
-    const vids = composite.getVideoTracks().length;
-    const auds = composite.getAudioTracks().length;
-    console.log('[cohost] ontrack:', kind, { vids, auds });
+  // log track counts
+  const vids = composite.getVideoTracks().length;
+  const auds = composite.getAudioTracks().length;
+  console.log('[cohost] ontrack:', kind, { vids, auds, trackId: event.track.id });
   };
 
   // Periodic inbound stats
@@ -1094,6 +1101,7 @@ export async function coHostJoinStream(
     try {
       const stats = await pc.getStats();
       let frames = 0, width = 0, height = 0;
+      let selected: any = null;
       stats.forEach((r: any) => {
         if (r.type === 'inbound-rtp' && r.kind === 'video') {
           frames = r.framesDecoded || frames;
@@ -1102,8 +1110,25 @@ export async function coHostJoinStream(
           width = r.frameWidth || width;
           height = r.frameHeight || height;
         }
+        if (r.type === 'transport' && r.selectedCandidatePairId && typeof stats.get === 'function') {
+          selected = stats.get(r.selectedCandidatePairId);
+        }
       });
-      console.log('[cohost] inbound stats', { framesDecoded: frames, frameSize: width && height ? `${width}x${height}` : undefined });
+      if (selected) {
+        const local = stats.get(selected.localCandidateId);
+        const remote = stats.get(selected.remoteCandidateId);
+        console.log('[cohost] inbound stats', {
+          framesDecoded: frames,
+          frameSize: width && height ? `${width}x${height}` : undefined,
+          candidatePair: {
+            state: selected.state,
+            local: local ? { type: local.candidateType, ip: local.ip, protocol: local.protocol } : null,
+            remote: remote ? { type: remote.candidateType, ip: remote.ip, protocol: remote.protocol } : null,
+          },
+        });
+      } else {
+        console.log('[cohost] inbound stats', { framesDecoded: frames, frameSize: width && height ? `${width}x${height}` : undefined });
+      }
     } catch {}
   }, 5000);
   
