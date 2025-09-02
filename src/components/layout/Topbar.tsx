@@ -42,7 +42,7 @@ export default function Topbar() {
   };
 
   return (
-    <header className="fixed top-0 left-0 w-full bg-white/90 h-14 z-20 backdrop-blur border-b">
+    <header className="fixed top-0 left-0 w-full bg-white h-14 z-20 backdrop-blur border-b border-gray-200">
       <div className="max-w-5xl mx-auto h-full px-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link to="/" className="font-extrabold text-blue-600 text-lg">LivePulse</Link>

@@ -5,12 +5,12 @@
 @tailwind utilities;
 
 :root {
-	--bg: #121212; /* dark background */
-	--panel: #1e1e1e; /* panel background */
+	--bg: #ffffff; /* white background */
+	--panel: #f8f8f8; /* light panel background */
 	--muted: #6b7280; /* muted text */
 	--primary: #ff0000; /* bright red */
 	--accent: #e60000; /* darker red */
-	--text: #ffffff; /* white text */
+	--text: #000000; /* black text */
 }
 
 html, body, #root {
@@ -28,15 +28,15 @@ body {
 	box-shadow: 0 6px 18px rgba(0,0,0,0.2);
 }
 
-/* dark theme - now using black and red */
+/* light theme - now using white */
 :root[data-theme='dark'] {
-	--bg: #121212;
-	--panel: #1e1e1e;
+	--bg: #ffffff;
+	--panel: #f8f8f8;
 	--muted: #6b7280;
 	--primary: #ff0000;
 	--accent: #e60000;
-	--text: #ffffff;
-	color-scheme: dark;
+	--text: #000000;
+	color-scheme: light;
 }
 
 .live-take-title {

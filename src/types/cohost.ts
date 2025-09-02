@@ -11,6 +11,8 @@ export interface JoinRequestDoc {
 
 export interface CoHostConnection {
   uid: string;
+  displayName?: string | null;
+  photoURL?: string | null;
   peerConnection: RTCPeerConnection;
   stream?: MediaStream;
   isMuted: boolean;

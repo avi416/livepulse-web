@@ -1,5 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { createBroadcasterPC, hostAcceptCoHost } from "../services/webrtcService";
+      
+      // Send a heartbeat immediately to ensure stream stays alive
+      try {
+        console.log("💓 Sending immediate heartbeat before accepting co-host...");
+        await heartbeatLiveStream(streamId);
+        console.log("✅ Pre-cohost heartbeat sent successfully");
+      } catch (err) {
+        console.error("❌ Pre-cohost heartbeat failed:", err);
+        // Continue anyway, we'll try to recover
+      }
+      
+      // Create a video element for the co-host with specific styling
+      const coHostVideoElement = document.createElement('video');
+      coHostVideoElement.autoPlay = true;
+      coHostVideoElement.playsInline = true;
+      coHostVideoElement.controls = true;
+      coHostVideoElement.muted = false; // Not muted by default
+      coHostVideoElement.style.objectFit = 'contain'; // Ensure full visibility
+      coHostVideoElement.style.width = '100%';
+      coHostVideoElement.style.height = '100%';
+      coHostVideoElement.style.backgroundColor = 'black';
 import { endLiveStream, heartbeatLiveStream, startLiveStream, getStreamById } from "../services/streamService";
 import { RequestsPanel, HostCohostController, StopLiveButton, LiveGrid, DebugPanel } from "./cohost";
 import type { CoHostConnection } from "../types/cohost";
@@ -108,16 +129,125 @@ export default function LiveStream() {
       return;
     }
     
+    // Import needed Firebase modules
+    const { getFirestoreInstance } = await import('../services/firebase');
+    const { doc, collection, getDoc, setDoc, updateDoc } = await import('firebase/firestore');
+    const db = getFirestoreInstance();
+    
     try {
       console.log(`🤝 Host accepting co-host: ${uid}`);
       
+      // Send a heartbeat immediately to ensure stream stays alive
+      try {
+        console.log("💓 Sending immediate heartbeat before accepting co-host...");
+        await heartbeatLiveStream(streamId);
+        console.log("✅ Pre-cohost heartbeat sent successfully");
+      } catch (err) {
+        console.error("❌ Pre-cohost heartbeat failed:", err);
+        // Continue anyway, we'll try to recover
+      }
+      
+      // Create a video element for the co-host with specific styling for better visibility
+      const coHostVideoElement = document.createElement('video');
+      coHostVideoElement.autoplay = true;
+      coHostVideoElement.playsInline = true;
+      coHostVideoElement.controls = true;
+      coHostVideoElement.muted = false; // Not muted by default
+      coHostVideoElement.style.objectFit = 'contain';
+      coHostVideoElement.style.width = '100%';
+      coHostVideoElement.style.height = '100%';
+      coHostVideoElement.style.backgroundColor = 'black';
+      
+      // Check if there's a pending co-host request
+      const liveStreamDoc = doc(db, 'liveStreams', streamId);
+      const cohostDoc = doc(collection(liveStreamDoc, 'cohost'), uid);
+      
+      // Force the stream status to 'live' before proceeding
+      try {
+        await updateDoc(liveStreamDoc, {
+          status: 'live',
+          lastSeen: new Date(),
+          hasCoHost: true // Add a flag indicating this stream has a co-host
+        });
+        console.log("✅ Stream status refreshed to 'live' with co-host flag");
+      } catch (err) {
+        console.error("❌ Failed to refresh stream status:", err);
+        // Continue anyway
+      }
+      
+      // Update co-host document to indicate host is preparing to connect
+      try {
+        await setDoc(cohostDoc, { 
+          hostPreparing: true,
+          hostAcceptedAt: new Date().toISOString(),
+          streamId: streamId,
+          // Include stream status information
+          streamStatus: 'live'
+        }, { merge: true });
+        console.log('✅ Updated co-host document to indicate host is preparing');
+      } catch (err) {
+        console.warn('⚠️ Could not update co-host document:', err);
+        // Continue anyway as this is just a notification
+      }
+      
+      // Check if the co-host is waiting
+      try {
+        const cohostData = await getDoc(cohostDoc);
+        if (cohostData.exists()) {
+          console.log('✅ Found co-host request data:', cohostData.data());
+          
+          // If the co-host isn't waiting anymore, abort
+          if (cohostData.data().waitingForAnswer === false) {
+            console.warn('⚠️ Co-host is no longer waiting for answer, aborting connection');
+            return;
+          }
+        } else {
+          console.warn('⚠️ No co-host request data found, but continuing anyway');
+        }
+      } catch (err) {
+        console.error('❌ Error checking co-host request:', err);
+        // Continue anyway as this is just a check
+      }
+      
+      // Get co-host display name from their join request BEFORE initiating connection
+      let displayName = uid.substring(0, 6); // Default to truncated UID
+      let photoURL = null;
+      
+      try {
+        // Try to fetch the request to get the display name
+        const requestsRef = collection(db, 'liveStreams', streamId, 'requests');
+        const requestSnapshot = await getDoc(doc(requestsRef, uid));
+        if (requestSnapshot.exists()) {
+          const data = requestSnapshot.data();
+          displayName = data.displayName || displayName;
+          photoURL = data.photoURL || null;
+          console.log(`📛 Found co-host display name: ${displayName}`);
+        }
+      } catch (err) {
+        console.warn('⚠️ Could not fetch co-host display name:', err);
+      }
+      
       // Accept the co-host connection
-      const { pc, cleanup } = await hostAcceptCoHost(
+      console.log(`🔄 Initiating connection with co-host ${uid}...`);
+      
+      // Set a timeout to abort if taking too long
+      const connectionPromise = hostAcceptCoHost(
         streamId as string,
         broadcasterRef.current.stream as MediaStream,
-        document.createElement('video'),
+        coHostVideoElement,
         uid
       );
+      
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Connection timeout - taking too long to connect to co-host')), 60000);
+      });
+      
+      const { pc, cleanup } = await Promise.race([
+        connectionPromise,
+        timeoutPromise as Promise<any>
+      ]);
+      
+      console.log(`✅ Connection established with co-host ${uid}`);
       
       // Add a callback for remote tracks
       pc.ontrack = (event) => {
@@ -147,11 +277,19 @@ export default function LiveStream() {
         setCohosts(prev => {
           const newCohosts = [
             ...prev.filter(c => c.uid !== uid),
-            { uid: uid, peerConnection: pc, stream: cohostStream, isMuted: false }
+            { 
+              uid: uid, 
+              displayName: displayName, 
+              photoURL: photoURL,
+              peerConnection: pc, 
+              stream: cohostStream, 
+              isMuted: false 
+            }
           ];
           console.log(`✅ Updated cohosts list: ${newCohosts.length} co-hosts`, 
             newCohosts.map(c => ({ 
               uid: c.uid, 
+              displayName: c.displayName,
               hasStream: !!c.stream, 
               trackCount: c.stream?.getTracks().length || 0
             }))
@@ -166,6 +304,23 @@ export default function LiveStream() {
         }, 500);
       };
       
+      // Add connection state monitoring
+      pc.onconnectionstatechange = () => {
+        console.log(`🔄 Host-CoHost connection state changed: ${pc.connectionState}`);
+        
+        // If disconnected, update UI
+        if (pc.connectionState === 'disconnected' || 
+            pc.connectionState === 'failed' || 
+            pc.connectionState === 'closed') {
+          console.log(`⚠️ Co-host ${uid} connection ended: ${pc.connectionState}`);
+          
+          // Remove co-host from the list after a brief delay
+          setTimeout(() => {
+            removeCoHost(uid);
+          }, 1000);
+        }
+      };
+      
       // Store the connection for later cleanup
       setCoHostConnections(prev => {
         const updated = new Map(prev);
@@ -175,6 +330,21 @@ export default function LiveStream() {
       });
     } catch (error) {
       console.error(`❌ Failed to accept co-host ${uid}:`, error);
+      
+      // Notify co-host about the error
+      try {
+        const liveStreamDoc = doc(db, 'liveStreams', streamId);
+        const cohostDoc = doc(collection(liveStreamDoc, 'cohost'), uid);
+        
+        await setDoc(cohostDoc, { 
+          hostError: `Failed to establish connection: ${error.message || 'Unknown error'}`,
+          errorTimestamp: new Date().toISOString()
+        }, { merge: true });
+        
+        console.log('✅ Error status updated for co-host');
+      } catch (updateErr) {
+        console.error('❌ Could not update error status:', updateErr);
+      }
     }
   };
 
@@ -226,15 +396,32 @@ export default function LiveStream() {
   // Manage heartbeat and cleanup when navigating away
   useEffect(() => {
     let hb: number | null = null;
-    // heartbeat while live - occurs every 15 seconds
+    // heartbeat while live - occurs more frequently (every 5 seconds) to ensure stability
     if (isLive && streamId) {
       console.log("🔄 Starting heartbeat for stream:", streamId);
+      
+      // Send an immediate heartbeat when starting
+      console.log("💓 Sending immediate initial heartbeat...");
+      heartbeatLiveStream(streamId)
+        .then(() => console.log("✅ Initial heartbeat sent successfully"))
+        .catch((err) => console.error("❌ Initial heartbeat failed:", err));
+      
+      // Regular interval heartbeat
       hb = window.setInterval(() => {
         console.log("💓 Sending heartbeat...");
         heartbeatLiveStream(streamId)
           .then(() => console.log("✅ Heartbeat sent successfully"))
-          .catch((err) => console.error("❌ Heartbeat failed:", err));
-      }, 15_000);
+          .catch((err) => {
+            console.error("❌ Heartbeat failed:", err);
+            // Recovery attempt - try one more time after a short delay
+            setTimeout(() => {
+              console.log("🔄 Attempting recovery heartbeat...");
+              heartbeatLiveStream(streamId).catch(e => 
+                console.error("❌ Recovery heartbeat also failed:", e)
+              );
+            }, 1000);
+          });
+      }, 5_000); // Reduced to 5 seconds for more reliable stream status
     }
     
     const handleBeforeUnload = () => {
@@ -320,11 +507,15 @@ export default function LiveStream() {
   }, [isLive, streamId, isHost, cohosts]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-white text-gray-800 p-4">
+    <div className={`flex flex-col items-center justify-center min-h-screen bg-white text-gray-800 p-4 ${
+      cohosts.length > 0 ? 'w-full max-w-full' : ''
+    }`}>
       <h1 className="text-2xl font-bold mb-6">🎥 Live Stream</h1>
 
       {/* Use the LiveGrid component to display host and co-host videos side by side */}
-      <div className="w-[600px] max-w-full">
+      <div className={`${
+        cohosts.length > 0 ? 'w-[1200px]' : 'w-[600px]'
+      } max-w-full transition-all duration-300`}>
         <LiveGrid 
           hostVideoRef={videoRef}
           cohosts={cohosts}
@@ -361,7 +552,11 @@ export default function LiveStream() {
               </div>
               
               {/* This is the panel with approval buttons */}
-              <RequestsPanel liveId={streamId} onApproved={handleCoHostApproval} />
+              <RequestsPanel 
+                liveId={streamId} 
+                onApproved={handleCoHostApproval} 
+                hasActiveCohost={cohosts.length > 0} 
+              />
               
               {cohosts.length > 0 && (
                 <HostCohostController 

@@ -198,34 +198,57 @@ export function subscribeLiveStreams(callback: (streams: LiveStreamDoc[]) => voi
 
 /**
  * 🔄 Heartbeat: update lastSeen to keep stream considered "live".
- * Also verifies the stream is still in 'live' status before updating.
+ * Updates the stream to 'live' status regardless of current state to fix any issues.
  */
 export async function heartbeatLiveStream(id: string): Promise<void> {
   const db = getFirestoreInstance();
   
-  // First check if the stream is still in 'live' status
+  // Get a reference to the stream
   const streamRef = doc(db, 'liveStreams', id);
-  const streamDoc = await getDoc(streamRef);
   
-  if (!streamDoc.exists()) {
-    console.warn(`⚠️ Heartbeat failed: Stream ${id} does not exist`);
-    return;
+  try {
+    // Check if the stream exists
+    const streamDoc = await getDoc(streamRef);
+    
+    if (!streamDoc.exists()) {
+      console.warn(`⚠️ Heartbeat failed: Stream ${id} does not exist`);
+      return;
+    }
+    
+    const streamData = streamDoc.data();
+    
+    // If the stream is marked as ended but we're sending a heartbeat,
+    // this might indicate an issue where the stream was mistakenly marked as ended
+    if (streamData.status !== 'live') {
+      console.warn(`🔄 Stream ${id} was marked as ${streamData.status}, restoring to 'live'`);
+    }
+    
+    // Always update to 'live' status regardless of current state
+    // This helps recover from incorrect status changes
+    console.log(`💓 Updating heartbeat for stream ${id}`);
+    await updateDoc(streamRef, { 
+      lastSeen: serverTimestamp(),
+      status: 'live', // Force status to 'live'
+      heartbeatCount: (streamData.heartbeatCount || 0) + 1,
+      recoveredAt: streamData.status !== 'live' ? new Date().toISOString() : undefined
+    });
+    console.log(`✅ Heartbeat updated for stream ${id}`);
+  } catch (error) {
+    console.error(`❌ Error during heartbeat for stream ${id}:`, error);
+    
+    // Try a more basic update as a fallback
+    try {
+      await updateDoc(streamRef, { 
+        lastSeen: new Date(), // Use client date as fallback
+        status: 'live',
+        errorRecovery: true
+      });
+      console.log(`✅ Fallback heartbeat updated for stream ${id}`);
+    } catch (fallbackError) {
+      console.error(`❌ Even fallback heartbeat failed for stream ${id}:`, fallbackError);
+      throw fallbackError; // Re-throw to inform caller
+    }
   }
-  
-  const streamData = streamDoc.data();
-  if (streamData.status !== 'live') {
-    console.warn(`⚠️ Heartbeat skipped: Stream ${id} is not live (status: ${streamData.status})`);
-    return;
-  }
-  
-  // Update the lastSeen timestamp
-  console.log(`💓 Updating heartbeat for stream ${id}`);
-  await updateDoc(streamRef, { 
-    lastSeen: serverTimestamp(),
-    // Ensure status is still 'live'
-    status: 'live'
-  });
-  console.log(`✅ Heartbeat updated for stream ${id}`);
 }
 
 /**

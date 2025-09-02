@@ -5,13 +5,14 @@ import type { JoinRequestDoc } from '../../types/cohost';
 interface RequestsPanelProps {
   liveId: string;
   onApproved?: (uid: string) => void;
+  hasActiveCohost?: boolean;
 }
 
 interface RequestWithId extends JoinRequestDoc {
   id: string;
 }
 
-export default function RequestsPanel({ liveId, onApproved }: RequestsPanelProps) {
+export default function RequestsPanel({ liveId, onApproved, hasActiveCohost }: RequestsPanelProps) {
   const [requests, setRequests] = useState<RequestWithId[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
@@ -68,20 +69,29 @@ export default function RequestsPanel({ liveId, onApproved }: RequestsPanelProps
 
   if (requests.length === 0) {
     return (
-      <div className="mb-6 p-5 bg-white rounded-md border-2 border-blue-200 shadow-md">
+      <div className="mb-6 p-5 bg-white rounded-md border-2 border-blue-200 shadow-md transition-all duration-300">
         <h3 className="text-xl font-bold text-gray-800 flex items-center">
           <span className="text-blue-500 mr-2">👥</span> Co-host Requests
         </h3>
-        <p className="text-gray-700 mt-3 p-3 bg-gray-50 rounded-md border border-gray-200">No requests to join yet.</p>
+        <p className="text-gray-700 mt-3 p-3 bg-gray-50 rounded-md border border-gray-200">
+          {hasActiveCohost 
+            ? "You have an active co-host in your stream." 
+            : "No requests to join yet."}
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="mb-6 p-5 bg-white rounded-md border-2 border-blue-200 shadow-md">
+    <div className="mb-6 p-5 bg-white rounded-md border-2 border-blue-200 shadow-md transition-all duration-300">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xl font-bold text-gray-800 flex items-center">
           <span className="text-blue-500 mr-2">👥</span> Co-host Requests
+          {hasActiveCohost && (
+            <span className="ml-2 px-3 py-1 bg-green-500 text-white text-sm font-bold rounded-full shadow-md animate-pulse">
+              Active Co-host
+            </span>
+          )}
         </h3>
         {loading && (
           <div className="flex items-center">
@@ -98,6 +108,11 @@ export default function RequestsPanel({ liveId, onApproved }: RequestsPanelProps
             <span className="ml-2 px-3 py-1 bg-yellow-400 text-gray-800 text-sm font-bold rounded-full shadow-md animate-pulse">
               {pendingRequests.length}
             </span>
+            {hasActiveCohost && (
+              <span className="ml-2 text-sm text-yellow-600">
+                (You already have an active co-host)
+              </span>
+            )}
           </div>
           <div className="space-y-4 mt-3">
             {pendingRequests.map((request) => (
@@ -122,8 +137,9 @@ export default function RequestsPanel({ liveId, onApproved }: RequestsPanelProps
                 <div className="flex space-x-3">
                   <button
                     onClick={() => handleApprove(request.id)}
-                    disabled={loading || actionInProgress === request.id}
-                    className="px-4 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white rounded-md text-sm font-bold shadow-md hover:from-green-500 hover:to-green-600 transition-all transform hover:scale-105 flex items-center"
+                    disabled={loading || actionInProgress === request.id || hasActiveCohost}
+                    className={`px-4 py-2 bg-gradient-to-r from-green-400 to-green-500 text-white rounded-md text-sm font-bold shadow-md transition-all transform hover:scale-105 flex items-center ${hasActiveCohost ? 'opacity-50 cursor-not-allowed' : 'hover:from-green-500 hover:to-green-600'}`}
+                    title={hasActiveCohost ? "You already have an active co-host" : "Approve this request"}
                   >
                     <span className="mr-1">✓</span> Approve
                   </button>

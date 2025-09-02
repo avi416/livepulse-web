@@ -7,12 +7,12 @@ import ActionRail from '../components/layout/ActionRail';
 
 export default function AppShell() {
   useEffect(() => {
-    // default to dark theme for immersive view
+    // default to light theme with white background
     document.documentElement.setAttribute('data-theme', 'dark');
   }, []);
 
   return (
-    <div className="appShell min-h-screen bg-[var(--bg)] text-white">
+    <div className="appShell min-h-screen bg-[var(--bg)] text-black">
       <Topbar />
       <div className="pt-18">
         <div className="mx-auto max-w-[1300px] px-2 md:px-4 lg:px-6">

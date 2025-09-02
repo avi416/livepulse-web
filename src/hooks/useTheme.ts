@@ -6,7 +6,7 @@ export function useTheme() {
       const v = localStorage.getItem('theme');
       if (v) return v === 'dark';
     } catch {}
-    return false;
+    return false; // Default to light theme
   });
   const [rtl, setRtl] = useState<boolean>(() => {
     try {
