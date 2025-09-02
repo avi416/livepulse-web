@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getLiveOnlyStreams, type LiveStreamDoc } from '../services/streamService';
+import { getLiveOnlyStreams } from '../services/streamService';
+import type { LiveStreamDoc } from '../services/liveStreams';
 
 export default function LiveWatch() {
   const [streams, setStreams] = useState<LiveStreamDoc[]>([]);

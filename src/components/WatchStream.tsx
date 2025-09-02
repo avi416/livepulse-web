@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { watcherJoin } from '../services/webrtcService';
 import { getStreamById } from '../services/streamService';
-import type { LiveStreamDoc } from '../services/streamService';
+import type { LiveStreamDoc } from '../services/liveStreams';
 
 interface Props { 
   streamId: string;

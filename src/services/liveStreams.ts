@@ -5,9 +5,9 @@ export type LiveStreamStatus = 'live' | 'ended';
 
 export interface LiveStreamDoc {
   id: string;
-  uid: string;
-  displayName: string;
-  photoURL: string | null;
+  uid?: string | null;
+  displayName?: string | null;
+  photoURL?: string | null;
   title: string;
   status: LiveStreamStatus;
   startedAt: unknown; // Firestore Timestamp

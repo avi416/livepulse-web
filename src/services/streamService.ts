@@ -38,6 +38,13 @@ export interface LiveStreamDoc {
   userId?: string | null;
   displayName?: string | null;
   photoURL?: string | null;
+  cohosts?: Record<string, any>;
+  hostName?: string;
+  description?: string;
+  viewerCount?: number;
+  hasCoHost?: boolean;
+  errorRecovery?: boolean;
+  reconnectedAt?: string;
 }
 
 /**
@@ -144,7 +151,17 @@ export async function getLiveOnlyStreams(): Promise<LiveStreamDoc[]> {
   });
   
   console.log(`📊 Returning ${fresh.length} fresh live streams`);
-  return fresh as LiveStreamDoc[];
+  
+  // Ensure all required properties are defined before returning
+  return fresh.map((stream: any) => ({
+    ...stream,
+    // Add optional properties to ensure compatibility
+    cohosts: stream.cohosts || {},
+    hostName: stream.hostName || stream.displayName || 'Unknown Host',
+    description: stream.description || '',
+    viewerCount: stream.viewerCount || 0,
+    hasCoHost: stream.hasCoHost || false
+  })) as LiveStreamDoc[];
 }
 
 /**
@@ -265,11 +282,25 @@ export async function createStreamMetadata(stream: Omit<Stream, 'id'>) {
 /**
  * 🎯 החזרת שידור לפי מזהה
  */
-export async function getStreamById(id: string) {
+export async function getStreamById(id: string): Promise<LiveStreamDoc | null> {
   const db = getFirestoreInstance();
   const docRef = doc(db, 'liveStreams', id);
   const snap = await getDoc(docRef);
-  return snap.exists() ? (snap.data() as LiveStreamDoc) : null;
+  
+  if (!snap.exists()) return null;
+  
+  const data = snap.data() as any;
+  
+  // Ensure all properties are present
+  return {
+    ...data,
+    id: snap.id,
+    cohosts: data.cohosts || {},
+    hostName: data.hostName || data.displayName || 'Unknown Host',
+    description: data.description || '',
+    viewerCount: data.viewerCount || 0,
+    hasCoHost: data.hasCoHost || false
+  } as LiveStreamDoc;
 }
 
 /**
