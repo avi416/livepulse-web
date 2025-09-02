@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { createBroadcasterPC, hostAcceptCoHost } from "../services/webrtcService";
+import { createBroadcasterPC } from "../services/webrtcService";
 import { endLiveStream, heartbeatLiveStream, startLiveStream, getStreamById } from "../services/streamService";
-import { RequestsPanel, HostCohostController, StopLiveButton, LiveGrid, DebugPanel } from "./cohost";
+import { RequestsPanel, HostCohostController, StopLiveButton, LiveGrid, DebugPanel, HostCohostPanel } from "./cohost";
 import type { CoHostConnection } from "../types/cohost";
 import { useCoHostMixer } from "../hooks/useCoHostMixer";
 
@@ -14,13 +14,15 @@ export default function LiveStream() {
   const [streamId, setStreamId] = useState<string | null>(null);
   const [cohosts, setCohosts] = useState<CoHostConnection[]>([]);
   const [coHostConnections, setCoHostConnections] = useState<Map<string, any>>(new Map());
+  const [pendingCohostId, setPendingCohostId] = useState<string | null>(null);
+  const [hostLocalStream, setHostLocalStream] = useState<MediaStream | null>(null);
   const broadcasterRef = useRef<null | { pc: RTCPeerConnection; unsubAnswer?: () => void; unsubViewerICE?: () => void; stream?: MediaStream }>(null);
   
   // Manual force debug value - always true to show panel
   const isHost = true;
 
   // Initialize the mixer (if enabled)
-  const { addCoHostStream, removeCoHostStream } = useCoHostMixer({
+  const { removeCoHostStream } = useCoHostMixer({
     hostStream: broadcasterRef.current?.stream || null,
     enabled: ENABLE_MIXER
   });
@@ -56,6 +58,9 @@ export default function LiveStream() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
+
+  // keep host local stream in state for co-host panel wiring
+  setHostLocalStream(stream);
 
       // צור רשומת liveStreams בפיירסטור
       const id = await startLiveStream("My Live Stream");
@@ -101,231 +106,7 @@ export default function LiveStream() {
     }
   };
 
-  // Handle co-host approval
-  const handleCoHostApproval = async (uid: string) => {
-    if (!streamId || !broadcasterRef.current?.stream) {
-      console.error("❌ Cannot accept co-host: missing streamId or broadcaster stream");
-      return;
-    }
-    
-    // Import needed Firebase modules
-    const { getFirestoreInstance } = await import('../services/firebase');
-    const { doc, collection, getDoc, setDoc, updateDoc } = await import('firebase/firestore');
-    const db = getFirestoreInstance();
-    
-    try {
-      console.log(`🤝 Host accepting co-host: ${uid}`);
-      
-      // Send a heartbeat immediately to ensure stream stays alive
-      try {
-        console.log("💓 Sending immediate heartbeat before accepting co-host...");
-        await heartbeatLiveStream(streamId);
-        console.log("✅ Pre-cohost heartbeat sent successfully");
-      } catch (err) {
-        console.error("❌ Pre-cohost heartbeat failed:", err);
-        // Continue anyway, we'll try to recover
-      }
-      
-      // Create a video element for the co-host with specific styling for better visibility
-      const coHostVideoElement = document.createElement('video');
-      coHostVideoElement.autoplay = true;
-      coHostVideoElement.playsInline = true;
-      coHostVideoElement.controls = true;
-      coHostVideoElement.muted = false; // Not muted by default
-      coHostVideoElement.style.objectFit = 'contain';
-      coHostVideoElement.style.width = '100%';
-      coHostVideoElement.style.height = '100%';
-      coHostVideoElement.style.backgroundColor = 'black';
-      
-      // Check if there's a pending co-host request
-      const liveStreamDoc = doc(db, 'liveStreams', streamId);
-      const cohostDoc = doc(collection(liveStreamDoc, 'cohost'), uid);
-      
-      // Force the stream status to 'live' before proceeding
-      try {
-        await updateDoc(liveStreamDoc, {
-          status: 'live',
-          lastSeen: new Date(),
-          hasCoHost: true // Add a flag indicating this stream has a co-host
-        });
-        console.log("✅ Stream status refreshed to 'live' with co-host flag");
-      } catch (err) {
-        console.error("❌ Failed to refresh stream status:", err);
-        // Continue anyway
-      }
-      
-      // Update co-host document to indicate host is preparing to connect
-      try {
-        await setDoc(cohostDoc, { 
-          hostPreparing: true,
-          hostAcceptedAt: new Date().toISOString(),
-          streamId: streamId,
-          // Include stream status information
-          streamStatus: 'live'
-        }, { merge: true });
-        console.log('✅ Updated co-host document to indicate host is preparing');
-      } catch (err) {
-        console.warn('⚠️ Could not update co-host document:', err);
-        // Continue anyway as this is just a notification
-      }
-      
-      // Check if the co-host is waiting
-      try {
-        const cohostData = await getDoc(cohostDoc);
-        if (cohostData.exists()) {
-          console.log('✅ Found co-host request data:', cohostData.data());
-          
-          // If the co-host isn't waiting anymore, abort
-          if (cohostData.data().waitingForAnswer === false) {
-            console.warn('⚠️ Co-host is no longer waiting for answer, aborting connection');
-            return;
-          }
-        } else {
-          console.warn('⚠️ No co-host request data found, but continuing anyway');
-        }
-      } catch (err) {
-        console.error('❌ Error checking co-host request:', err);
-        // Continue anyway as this is just a check
-      }
-      
-      // Get co-host display name from their join request BEFORE initiating connection
-      let displayName = uid.substring(0, 6); // Default to truncated UID
-      let photoURL = null;
-      
-      try {
-        // Try to fetch the request to get the display name
-        const requestsRef = collection(db, 'liveStreams', streamId, 'requests');
-        const requestSnapshot = await getDoc(doc(requestsRef, uid));
-        if (requestSnapshot.exists()) {
-          const data = requestSnapshot.data();
-          displayName = data.displayName || displayName;
-          photoURL = data.photoURL || null;
-          console.log(`📛 Found co-host display name: ${displayName}`);
-        }
-      } catch (err) {
-        console.warn('⚠️ Could not fetch co-host display name:', err);
-      }
-      
-      // Accept the co-host connection
-      console.log(`🔄 Initiating connection with co-host ${uid}...`);
-      
-      // Set a timeout to abort if taking too long
-      const connectionPromise = hostAcceptCoHost(
-        streamId as string,
-        broadcasterRef.current.stream as MediaStream,
-        coHostVideoElement,
-        uid
-      );
-      
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Connection timeout - taking too long to connect to co-host')), 60000);
-      });
-      
-      const { pc, cleanup } = await Promise.race([
-        connectionPromise,
-        timeoutPromise as Promise<any>
-      ]);
-      
-      console.log(`✅ Connection established with co-host ${uid}`);
-      
-      // Add a callback for remote tracks
-      pc.ontrack = (event: RTCTrackEvent) => {
-        const stream = event.streams[0];
-        console.log(`📡 Received co-host stream from ${uid}`, {
-          stream: stream ? "valid stream" : "missing stream",
-          tracks: stream?.getTracks().map((t: MediaStreamTrack) => ({ kind: t.kind, enabled: t.enabled, muted: t.muted })) || []
-        });
-        
-        // Verify that we've received valid tracks
-        if (!stream || stream.getTracks().length === 0) {
-          console.warn("⚠️ Received empty or invalid stream from co-host");
-        }
-        
-        // Add to mixer if enabled
-        if (ENABLE_MIXER) {
-          addCoHostStream(uid, stream);
-        }
-        
-        // Create new stream object to ensure it's properly handled
-        const cohostStream = new MediaStream();
-        stream.getTracks().forEach((track: MediaStreamTrack) => {
-          cohostStream.addTrack(track);
-        });
-        
-        // Update co-hosts state with the new stream
-        setCohosts(prev => {
-          const newCohosts = [
-            ...prev.filter(c => c.uid !== uid),
-            { 
-              uid: uid, 
-              displayName: displayName, 
-              photoURL: photoURL,
-              peerConnection: pc, 
-              stream: cohostStream, 
-              isMuted: false 
-            }
-          ];
-          console.log(`✅ Updated cohosts list: ${newCohosts.length} co-hosts`, 
-            newCohosts.map(c => ({ 
-              uid: c.uid, 
-              displayName: c.displayName,
-              hasStream: !!c.stream, 
-              trackCount: c.stream?.getTracks().length || 0
-            }))
-          );
-          return newCohosts;
-        });
-        
-        // Force UI refresh
-        setTimeout(() => {
-          console.log("🔄 Forcing UI refresh for co-host display");
-          setCohosts(current => [...current]);
-        }, 500);
-      };
-      
-      // Add connection state monitoring
-      pc.onconnectionstatechange = () => {
-        console.log(`🔄 Host-CoHost connection state changed: ${pc.connectionState}`);
-        
-        // If disconnected, update UI
-        if (pc.connectionState === 'disconnected' || 
-            pc.connectionState === 'failed' || 
-            pc.connectionState === 'closed') {
-          console.log(`⚠️ Co-host ${uid} connection ended: ${pc.connectionState}`);
-          
-          // Remove co-host from the list after a brief delay
-          setTimeout(() => {
-            removeCoHost(uid);
-          }, 1000);
-        }
-      };
-      
-      // Store the connection for later cleanup
-      setCoHostConnections(prev => {
-        const updated = new Map(prev);
-        updated.set(uid, { pc, cleanup });
-        console.log(`✅ Stored connection for co-host ${uid} in map`);
-        return updated;
-      });
-    } catch (error) {
-      console.error(`❌ Failed to accept co-host ${uid}:`, error);
-      
-      // Notify co-host about the error
-      try {
-        const liveStreamDoc = doc(db, 'liveStreams', streamId);
-        const cohostDoc = doc(collection(liveStreamDoc, 'cohost'), uid);
-        
-        await setDoc(cohostDoc, { 
-          hostError: `Failed to establish connection: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          errorTimestamp: new Date().toISOString()
-        }, { merge: true });
-        
-        console.log('✅ Error status updated for co-host');
-      } catch (updateErr) {
-        console.error('❌ Could not update error status:', updateErr);
-      }
-    }
-  };
+  // Handle co-host approval (legacy logic removed; handled by HostCohostPanel)
 
   // Remove a co-host
   const removeCoHost = (uid: string) => {
@@ -533,9 +314,20 @@ export default function LiveStream() {
               {/* This is the panel with approval buttons */}
               <RequestsPanel 
                 liveId={streamId} 
-                onApproved={handleCoHostApproval} 
+                onApproved={(uid) => setPendingCohostId(uid)} 
                 hasActiveCohost={cohosts.length > 0} 
               />
+
+              {/* Dedicated co-host video panel driven by pendingCohostId */}
+              {pendingCohostId && hostLocalStream && (
+                <div className="mt-4">
+                  <HostCohostPanel
+                    streamId={streamId}
+                    localStream={hostLocalStream}
+                    pendingCohostId={pendingCohostId}
+                  />
+                </div>
+              )}
               
               {cohosts.length > 0 && (
                 <HostCohostController 

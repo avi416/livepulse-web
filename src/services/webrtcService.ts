@@ -1,5 +1,6 @@
 // src/services/webrtcService.ts
 import { doc, getDoc, onSnapshot, collection, addDoc, setDoc } from 'firebase/firestore';
+import { safeUpdateLiveStream } from './streamService';
 import { getFirestoreInstance } from './firebase';
 
 function buildIceServers(): RTCIceServer[] {
@@ -87,6 +88,14 @@ export async function createBroadcasterPC(
   );
 
   const pc = new RTCPeerConnection(getRtcConfig('broadcaster'));
+  console.log('[broadcasterPC] 🎛️ Created RTCPeerConnection for stream', streamId);
+
+  const logSenders = (where: string) => {
+    try {
+      const kinds = pc.getSenders().map((s) => s.track?.kind || 'none');
+      console.log(`[broadcasterPC] 🔎 senders @ ${where}:`, kinds);
+    } catch {}
+  };
 
   // הוסף רק track אחד מכל סוג – זה יצמצם תקלות
   const videoTrack = stream.getVideoTracks()[0] || null;
@@ -98,7 +107,13 @@ export async function createBroadcasterPC(
       muted: videoTrack.muted,
       readyState: videoTrack.readyState,
     });
-    const sender = pc.addTrack(videoTrack, stream);
+    // Ensure only one video sender; reuse existing transceiver if present
+    let vTrans = pc.getTransceivers().find((t) => t.sender.track?.kind === 'video' || t.receiver.track?.kind === 'video');
+    if (!vTrans) {
+      try { vTrans = pc.addTransceiver('video', { direction: 'sendonly' }); } catch {}
+    }
+    const sender = vTrans?.sender || pc.addTrack(videoTrack, stream);
+    try { await sender.replaceTrack(videoTrack); } catch {}
     // try set H264 preference on sender transceiver if available
     try { preferH264IfConfigured((sender as any).transport?._transceiver || (pc.getTransceivers().find(t => t.sender === sender) as RTCRtpTransceiver)); } catch {}
   } else {
@@ -111,10 +126,18 @@ export async function createBroadcasterPC(
       muted: audioTrack.muted,
       readyState: audioTrack.readyState,
     });
-  pc.addTrack(audioTrack, stream);
+    // Ensure only one audio sender; reuse existing transceiver if present
+    let aTrans = pc.getTransceivers().find((t) => t.sender.track?.kind === 'audio' || t.receiver.track?.kind === 'audio');
+    if (!aTrans) {
+      try { aTrans = pc.addTransceiver('audio', { direction: 'sendonly' }); } catch {}
+    }
+    const aSender = aTrans?.sender || pc.addTrack(audioTrack, stream);
+    try { await aSender.replaceTrack(audioTrack); } catch {}
   } else {
     console.warn('⚠️ No local AUDIO track found');
   }
+
+  logSenders('after attach local tracks');
 
   pc.ontrack = (event: RTCTrackEvent) => {
     console.log('📡 Broadcaster got remote track (loopback?):', event.track.kind, {
@@ -145,9 +168,12 @@ export async function createBroadcasterPC(
   };
 
   // יצירת Offer ושמירה ב־Firestore
-  console.log('📝 Creating broadcaster offer…');
+  console.log('[broadcasterPC] 📝 Creating broadcaster offer…');
+  let makingOffer = false;
+  makingOffer = true;
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
+  makingOffer = false;
 
   try {
     await setDoc(doc(db, 'liveStreams', liveId, 'sdp', 'offer'), offer);
@@ -198,13 +224,17 @@ export async function createBroadcasterPC(
   };
   pc.onnegotiationneeded = async () => {
     try {
-      console.log('🧩 Broadcaster negotiationneeded: creating new offer');
+      if (makingOffer) return;
+      makingOffer = true;
+      console.log('[broadcasterPC] 🧩 negotiationneeded → creating new offer');
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       await setDoc(doc(getFirestoreInstance(), 'liveStreams', liveId, 'sdp', 'offer'), offer);
+      console.log('[broadcasterPC] 🧩 negotiationcompleted');
     } catch (e) {
       console.error('❌ negotiationneeded failed:', e);
     }
+    finally { makingOffer = false; }
   };
   let restarting = false;
   pc.oniceconnectionstatechange = async () => {
@@ -225,6 +255,8 @@ export async function createBroadcasterPC(
       }
     }
   };
+  // Periodically confirm we still have active senders
+  setInterval(() => logSenders('periodic'), 5000);
 
   return { pc, unsubAnswer, unsubViewerICE };
 }
@@ -282,38 +314,58 @@ export async function connectAsViewer(liveId: string, videoEl: HTMLVideoElement)
       });
   }
 
-  // קבלת Tracks מהשדר
+  // קבלת Tracks מהשדר – שמירה על Stream יציב והוספת מסלולים לפי סוג
   pc.ontrack = (e) => {
     console.log('📡 Viewer received track:', e.track.kind, {
       muted: e.track.muted,
       readyState: e.track.readyState,
     });
 
-  // נשתמש ב־stream שה-RTC מוסיף (e.streams[0]) או ניצור אחד מה-track
-  const incoming = (e.streams && e.streams[0]) || new MediaStream([e.track]);
-    if (incoming) {
-      if (videoEl.srcObject !== incoming) {
-        console.log('🎥 Using e.streams[0]');
-        videoEl.srcObject = incoming;
-      }
-
-      // הגדרות מומלצות לצפייה
-      videoEl.autoplay = true;
-      videoEl.playsInline = true;
-      videoEl.controls = true;
-      videoEl.muted = true; // תחילה על mute כדי לאפשר autoplay; המשתמש יוכל להפעיל קול ידנית
-      try {
-        const onMeta = () => console.log('🎥 viewer loadedmetadata', { w: videoEl.videoWidth, h: videoEl.videoHeight, duration: videoEl.duration });
-        const onCanPlay = () => console.log('🎥 viewer canplay');
-        const onPlay = () => console.log('🎥 viewer playing');
-        const onError = (ev: any) => console.error('🎥 viewer video error', ev?.message || ev);
-        videoEl.addEventListener('loadedmetadata', onMeta, { once: true });
-        videoEl.addEventListener('canplay', onCanPlay, { once: true });
-        videoEl.addEventListener('play', onPlay, { once: true });
-        videoEl.addEventListener('error', onError);
-      } catch {}
-      tryPlay(videoEl);
+    // נשתמש ב־MediaStream יציב שמחובר ל-videoEl ונוסיף/נחליף מסלולים לפי kind
+    let composite: MediaStream | null = null;
+    if (videoEl.srcObject instanceof MediaStream) {
+      composite = videoEl.srcObject as MediaStream;
+    } else if (e.streams && e.streams[0]) {
+      // התחל מ-stream הנכנס אבל אל תדרוס אותו בהמשך
+      composite = new MediaStream();
+    } else {
+      composite = new MediaStream();
     }
+
+    const kind = e.track.kind;
+    const existingTracks = composite.getTracks();
+    const existingOfKind = existingTracks.filter((t) => t.kind === kind);
+
+    // אם כבר יש מסלול מאותו סוג – החלפה נקייה ב־replace semantics
+    if (existingOfKind.length > 0) {
+      existingOfKind.forEach((t) => composite!.removeTrack(t));
+    }
+    try {
+      composite.addTrack(e.track);
+    } catch (err) {
+      console.warn('⚠️ Failed to add track to composite stream', err);
+    }
+
+    if (videoEl.srcObject !== composite) {
+      videoEl.srcObject = composite;
+    }
+
+    // הגדרות מומלצות לצפייה
+    videoEl.autoplay = true;
+    videoEl.playsInline = true;
+    videoEl.controls = true;
+    videoEl.muted = true; // תחילה על mute כדי לאפשר autoplay; המשתמש יוכל להפעיל קול ידנית
+    try {
+      const onMeta = () => console.log('🎥 viewer loadedmetadata', { w: videoEl.videoWidth, h: videoEl.videoHeight, duration: videoEl.duration });
+      const onCanPlay = () => console.log('🎥 viewer canplay');
+      const onPlay = () => console.log('🎥 viewer playing');
+      const onError = (ev: any) => console.error('🎥 viewer video error', ev?.message || ev);
+      videoEl.addEventListener('loadedmetadata', onMeta, { once: true });
+      videoEl.addEventListener('canplay', onCanPlay, { once: true });
+      videoEl.addEventListener('play', onPlay, { once: true });
+      videoEl.addEventListener('error', onError);
+    } catch {}
+    tryPlay(videoEl);
   };
 
   // שליחת ICE Candidates → candidates_viewers
@@ -459,29 +511,43 @@ export async function hostAcceptCoHost(
 
   const db = getFirestoreInstance();
   const pc = new RTCPeerConnection(getRtcConfig('broadcaster'));
+  console.log('[hostPC] 🎛️ Created RTCPeerConnection for co-host session', { streamId, coHostId });
+
+  const logSenders = (where: string) => {
+    try {
+      const kinds = pc.getSenders().map((s) => s.track?.kind || 'none');
+      console.log(`[hostPC] 🔎 senders @ ${where}:`, kinds);
+    } catch {}
+  };
   
-  // Set up transceivers for bidirectional communication
-  try {
-    pc.addTransceiver('video', { direction: 'sendrecv' });
-    console.log('✅ Host added video transceiver with direction: sendrecv');
-    
-    pc.addTransceiver('audio', { direction: 'sendrecv' });
-    console.log('✅ Host added audio transceiver with direction: sendrecv');
-  } catch (err) {
-    console.warn('⚠️ Could not add transceivers:', err);
-    // Continue with addTrack method
+  // Ensure sendrecv transceivers
+  const vT = pc.addTransceiver('video', { direction: 'sendrecv' });
+  const aT = pc.addTransceiver('audio', { direction: 'sendrecv' });
+  try { preferH264IfConfigured(vT); } catch {}
+  try { preferH264IfConfigured(vT); } catch {}
+
+  // Attach host local tracks (host preview stays connected directly to localStream via UI)
+  const v = localStream.getVideoTracks()[0];
+  const a = localStream.getAudioTracks()[0];
+  if (v) {
+    try {
+      if ((v as MediaStreamTrack).readyState !== 'live') {
+        console.warn('[hostPC] video track not live:', (v as MediaStreamTrack).readyState);
+      }
+      (v as MediaStreamTrack).enabled = true;
+      await vT.sender.replaceTrack(v);
+    } catch (e) { console.warn('replaceTrack(video) failed', e); }
   }
-  
-  // Add local tracks to send to co-host - with explicit logging
-  localStream.getTracks().forEach(track => {
-    console.log('➕ Host adding track to co-host connection:', track.kind, {
-      id: track.id,
-      enabled: track.enabled,
-      muted: track.muted,
-      readyState: track.readyState
-    });
-    pc.addTrack(track, localStream);
-  });
+  if (a) {
+    try {
+      if ((a as MediaStreamTrack).readyState !== 'live') {
+        console.warn('[hostPC] audio track not live:', (a as MediaStreamTrack).readyState);
+      }
+      (a as MediaStreamTrack).enabled = true;
+      await aT.sender.replaceTrack(a);
+    } catch (e) { console.warn('replaceTrack(audio) failed', e); }
+  }
+  logSenders('after attach local (sendrecv)');
   
   // Make sure we have a valid stream with tracks to send
   if (localStream.getTracks().length === 0) {
@@ -490,97 +556,72 @@ export async function hostAcceptCoHost(
     console.log('✅ Host has', localStream.getTracks().length, 'tracks to send to co-host');
   }
   
-  // Set up remote video display
+  // Remote co-host stream → rendered only in remoteVideoEl
   pc.ontrack = (event) => {
-    console.log('📡 Host received track from co-host:', event.track.kind, {
+    const el = remoteVideoEl;
+    const kind = event.track.kind;
+    console.log('📡 Host received track from co-host:', kind, {
       readyState: event.track.readyState,
       muted: event.track.muted,
-      id: event.track.id
     });
-    
-    // Always ensure we have a video element
-    if (!remoteVideoEl) {
-      console.error('⚠️ No remote video element provided for co-host video');
-      return;
-    }
-    
-    if (event.streams && event.streams[0]) {
-      // Create a new MediaStream to ensure proper handling
-      const cohostStream = new MediaStream();
-      
-      // Add all tracks from the original stream
-      event.streams[0].getTracks().forEach(track => {
-        cohostStream.addTrack(track);
-      });
-      
-      console.log('🎥 Setting co-host video with tracks:', cohostStream.getTracks().length, 
-        cohostStream.getTracks().map(t => ({ kind: t.kind, id: t.id })));
-      
-      // First remove any existing srcObject
-      if (remoteVideoEl.srcObject) {
-        try {
-          const oldStream = remoteVideoEl.srcObject as MediaStream;
-          oldStream.getTracks().forEach(track => track.stop());
-          remoteVideoEl.srcObject = null;
-        } catch (err) {
-          console.warn('⚠️ Error cleaning up old stream:', err);
-        }
-      }
-      
-      // Set the new stream
-      console.log('🎥 Setting co-host video on remote element');
-      remoteVideoEl.srcObject = cohostStream;
-      remoteVideoEl.autoplay = true;
-      remoteVideoEl.playsInline = true;
-      remoteVideoEl.controls = true;
-      remoteVideoEl.muted = false; // Make sure audio is enabled
-      remoteVideoEl.style.objectFit = 'contain'; // Ensure the video is fully visible
-      
-      // Force play with retry logic
-      const playVideo = () => {
-        remoteVideoEl.play().catch(err => {
-          console.warn('⚠️ Could not autoplay co-host video:', err);
-          
-          // Try again after a short delay
-          setTimeout(() => {
-            remoteVideoEl.play().catch(delayedErr => {
-              console.warn('⚠️ Still could not autoplay co-host video after delay:', delayedErr);
-            });
-          }, 1000);
-        });
-      };
-      
-      // Try to play now or wait for canplay event
-      if (remoteVideoEl.readyState >= 3) { // HAVE_FUTURE_DATA or HAVE_ENOUGH_DATA
-        playVideo();
-      } else {
-        remoteVideoEl.oncanplay = () => {
-          playVideo();
-          remoteVideoEl.oncanplay = null;
-        };
-      }
+
+    // 1) Stable composite
+    let composite: MediaStream;
+    if (el.srcObject instanceof MediaStream) {
+      composite = el.srcObject as MediaStream;
     } else {
-      // If there's no stream in the event, create one and add the track
-      console.warn('⚠️ No streams found in track event from co-host, creating new stream');
-      
-      // Create or get existing stream
-      let streamToUse = remoteVideoEl.srcObject as MediaStream;
-      if (!streamToUse) {
-        streamToUse = new MediaStream();
-        remoteVideoEl.srcObject = streamToUse;
-      } else if (!(streamToUse instanceof MediaStream)) {
-        streamToUse = new MediaStream();
-        remoteVideoEl.srcObject = streamToUse;
-      }
-      
-      // Add the track if it's not already there
-      const trackExists = streamToUse.getTracks().some(t => t.id === event.track.id);
-      if (!trackExists) {
-        streamToUse.addTrack(event.track);
-        console.log('➕ Added track to manually created stream:', event.track.kind);
-      }
+      composite = new MediaStream();
     }
+
+    // 2) Replace only same-kind
+    composite
+      .getTracks()
+      .filter((t) => t.kind === kind)
+      .forEach((t) => { try { composite.removeTrack(t); } catch {} });
+    try { composite.addTrack(event.track); } catch (e) { console.warn('addTrack failed', e); }
+
+    // 3) Bind and prep for autoplay
+    if (el.srcObject !== composite) el.srcObject = composite;
+    el.autoplay = true;
+    el.playsInline = true;
+    el.muted = true; // allow autoplay; provide separate UI to unmute if needed
+    try { el.removeAttribute('controls'); } catch {}
+    try {
+      if (!el.style.width) el.style.width = '360px';
+      el.style.maxWidth = '100%';
+      el.style.objectFit = 'contain';
+    } catch {}
+
+    const tryPlay = () => el.play().catch(() => {
+      const resume = () => { el.play().catch(() => {}); cleanup(); };
+      const cleanup = () => ['click','touchstart','keydown'].forEach(ev => window.removeEventListener(ev, resume));
+      ['click','touchstart','keydown'].forEach(ev => window.addEventListener(ev, resume, { once: true }));
+    });
+    tryPlay();
+
+    // log track counts
+  const vids = composite.getVideoTracks().length;
+  const auds = composite.getAudioTracks().length;
+  console.log('[host] ontrack', { kind, vids, auds, trackId: event.track.id });
   };
+
+  // Periodic inbound stats
+  const statsTimer = setInterval(async () => {
+    try {
+      const stats = await pc.getStats();
+      let frames = 0, width = 0, height = 0;
+      stats.forEach((r: any) => {
+        if (r.type === 'inbound-rtp' && r.kind === 'video') {
+          frames = r.framesDecoded || frames;
+        }
+        if (r.type === 'track' && r.kind === 'video') {
+          width = r.frameWidth || width;
+          height = r.frameHeight || height;
+        }
+      });
+      console.log('[host] inbound stats', { framesDecoded: frames, frameSize: width && height ? `${width}x${height}` : undefined });
+    } catch {}
+  }, 5000);
   
   // ICE handling
   pc.onicecandidate = async (event) => {
@@ -606,6 +647,17 @@ export async function hostAcceptCoHost(
     }
   };
 
+  // Perfect negotiation flags
+  let makingOffer = false;
+  pc.onnegotiationneeded = async () => {
+    if (makingOffer) return;
+    makingOffer = true;
+    try {
+      console.log('[hostPC] 🧩 negotiationneeded (noop-answerer): keeping existing description to avoid glare');
+      // As the answerer, we avoid generating offers here to prevent glare.
+    } finally { makingOffer = false; }
+  };
+
   // Wait for co-host offer
   const liveStreamDoc = doc(db, 'liveStreams', streamId);
   const cohostDoc = doc(collection(liveStreamDoc, 'cohost'), coHostId);
@@ -620,8 +672,8 @@ export async function hostAcceptCoHost(
         console.warn(`⚠️ Stream status is ${streamData.status}, attempting to fix...`);
         
         // Force update the stream status back to live
-        const { updateDoc, serverTimestamp } = await import('firebase/firestore');
-        await updateDoc(liveStreamDoc, {
+        const { serverTimestamp } = await import('firebase/firestore');
+        await safeUpdateLiveStream(streamId, {
           status: 'live',
           lastSeen: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -684,7 +736,7 @@ export async function hostAcceptCoHost(
   
   // Set remote description from offer
   try {
-    console.log('📝 Setting remote description from co-host offer');
+    console.log('[hostPC] 📝 Setting remote description from co-host offer');
     await pc.setRemoteDescription(new RTCSessionDescription(offerData as RTCSessionDescriptionInit));
   } catch (err) {
     console.error('❌ Failed to set remote description:', err);
@@ -704,9 +756,11 @@ export async function hostAcceptCoHost(
   
   // Create and set answer
   try {
-    console.log('📝 Creating answer for co-host');
+    console.log('[hostPC] 📝 Creating answer for co-host');
+    makingOffer = true;
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
+    makingOffer = false;
     
     // Send answer to co-host
     console.log('📤 Sending answer to co-host');
@@ -794,6 +848,7 @@ export async function hostAcceptCoHost(
   // Connection state monitoring
   pc.onconnectionstatechange = async () => {
     console.log('🔗 Host-CoHost connection state:', pc.connectionState);
+    logSenders(`onconnectionstatechange:${pc.connectionState}`);
     
     try {
       // Update connection state in Firestore for the co-host to see
@@ -857,7 +912,8 @@ export async function hostAcceptCoHost(
     pc,
     cleanup: () => {
       try {
-        unsubCoHostCandidates();
+  unsubCoHostCandidates();
+  clearInterval(statsTimer);
         pc.close();
       } catch (err) {
         console.error('❌ Error during cleanup:', err);
@@ -932,29 +988,49 @@ export async function coHostJoinStream(
 
   const db = getFirestoreInstance();
   const pc = new RTCPeerConnection(getRtcConfig('broadcaster'));
+  console.log('[cohostPC] 🎛️ Created RTCPeerConnection for co-host joining', { streamId, coHostId });
+
+  const logSenders = (where: string) => {
+    try {
+      const kinds = pc.getSenders().map((s) => s.track?.kind || 'none');
+      console.log(`[cohostPC] 🔎 senders @ ${where}:`, kinds);
+    } catch {}
+  };
   
-  // Set up transceivers for bidirectional communication
-  try {
-    pc.addTransceiver('video', { direction: 'sendrecv' });
-    console.log('✅ Co-host added video transceiver with direction: sendrecv');
-    
-    pc.addTransceiver('audio', { direction: 'sendrecv' });
-    console.log('✅ Co-host added audio transceiver with direction: sendrecv');
-  } catch (err) {
-    console.warn('⚠️ Could not add transceivers:', err);
-    // Continue with addTrack method
+  // Ensure sendrecv transceivers
+  const vT = pc.addTransceiver('video', { direction: 'sendrecv' });
+  const aT = pc.addTransceiver('audio', { direction: 'sendrecv' });
+
+  // Attach local co-host tracks
+  const v = localStream.getVideoTracks()[0];
+  const a = localStream.getAudioTracks()[0];
+  if (!v) {
+    throw new Error('No local video track');
   }
-  
-  // Add local tracks to send to host
-  localStream.getTracks().forEach(track => {
-    console.log('➕ Co-Host adding track to host connection:', track.kind, {
-      id: track.id,
-      enabled: track.enabled,
-      muted: track.muted,
-      readyState: track.readyState
-    });
-    pc.addTrack(track, localStream);
-  });
+  if ((v as MediaStreamTrack).readyState !== 'live') {
+    throw new Error(`Video track not live: ${(v as MediaStreamTrack).readyState}`);
+  }
+  if (v) {
+    try {
+      if ((v as MediaStreamTrack).readyState !== 'live') {
+        console.warn('[cohostPC] video track not live:', (v as MediaStreamTrack).readyState);
+      }
+      (v as MediaStreamTrack).enabled = true;
+      const vSender = pc.getSenders().find((s) => s.track?.kind === 'video') || vT.sender;
+      await vSender.replaceTrack(v);
+    } catch (e) { console.warn('replaceTrack(video) failed', e); }
+  }
+  if (a) {
+    try {
+      if ((a as MediaStreamTrack).readyState !== 'live') {
+        console.warn('[cohostPC] audio track not live:', (a as MediaStreamTrack).readyState);
+      }
+      (a as MediaStreamTrack).enabled = true;
+      const aSender = pc.getSenders().find((s) => s.track?.kind === 'audio') || aT.sender;
+      await aSender.replaceTrack(a);
+    } catch (e) { console.warn('replaceTrack(audio) failed', e); }
+  }
+  logSenders('after attach local (sendrecv)');
   
   // Make sure we have a valid stream with tracks to send
   if (localStream.getTracks().length === 0) {
@@ -963,113 +1039,67 @@ export async function coHostJoinStream(
     console.log('✅ Co-host has', localStream.getTracks().length, 'tracks to send to host');
   }
   
-  // Set up remote video display for viewing the host's stream
+  // Remote HOST stream → rendered only in hostVideoEl
   pc.ontrack = (event) => {
-    console.log('📡 Co-Host received track from host:', event.track.kind, {
-      id: event.track.id,
-      enabled: event.track.enabled,
+    const el = hostVideoEl;
+    const kind = event.track.kind;
+    console.log('📡 Co-Host received track from host:', kind, {
+      readyState: event.track.readyState,
       muted: event.track.muted,
-      readyState: event.track.readyState
     });
-    
-    // Always ensure we have a valid hostVideoEl
-    if (!hostVideoEl) {
-      console.error('❌ No host video element provided to display host stream!');
-      return;
+
+    // 1) Stable composite
+    let composite: MediaStream;
+    if (el.srcObject instanceof MediaStream) {
+      composite = el.srcObject as MediaStream;
+    } else {
+      composite = new MediaStream();
     }
-    
-    // First, directly attach the individual track if no stream is available
-    if (!event.streams || !event.streams[0]) {
-      console.warn('⚠️ No streams array in track event from host - creating new stream');
-      
-      // Create a new stream if one doesn't exist or get the existing one
-      let streamToUse = hostVideoEl.srcObject as MediaStream;
-      if (!streamToUse) {
-        streamToUse = new MediaStream();
-        hostVideoEl.srcObject = streamToUse;
-      } else if (!(streamToUse instanceof MediaStream)) {
-        streamToUse = new MediaStream();
-        hostVideoEl.srcObject = streamToUse;
-      }
-      
-      // Add the track to our stream
-      try {
-        streamToUse.addTrack(event.track);
-        console.log('➕ Added track to manually created stream:', event.track.kind);
-      } catch (e) {
-        console.error('❌ Error adding track to stream:', e);
-      }
-    }
-    // If we have a stream in the event, use that directly
-    else {
-      const hostStream = event.streams[0];
-      console.log('🎥 Received host stream with tracks:', hostStream.getTracks().length, 
-        hostStream.getTracks().map(t => ({ kind: t.kind, id: t.id })));
-      
-      // IMPORTANT: Check if the video element already has a stream - if it does, don't replace it
-      // This prevents the host video from being lost when becoming a co-host
-      if (!hostVideoEl.srcObject || hostVideoEl.srcObject instanceof MediaStream && 
-          (hostVideoEl.srcObject as MediaStream).getTracks().length === 0) {
-        console.log('📺 Setting new host stream on video element');
-        hostVideoEl.srcObject = hostStream;
-      } else {
-        // If we already have a stream, just make sure it's unmuted and playing
-        console.log('📺 Host video already has a stream - preserving existing connection');
-        
-        // Add any new tracks from the incoming stream to the existing stream
-        if (hostVideoEl.srcObject instanceof MediaStream && hostStream.getTracks().length > 0) {
-          const existingStream = hostVideoEl.srcObject as MediaStream;
-          console.log('🔄 Adding new tracks to existing stream if needed');
-          
-          hostStream.getTracks().forEach(track => {
-            // Check if this track type already exists in our stream
-            const hasTrackType = existingStream.getTracks().some(t => t.kind === track.kind);
-            if (!hasTrackType) {
-              existingStream.addTrack(track);
-              console.log(`➕ Added new ${track.kind} track to existing stream`);
-            }
-          });
-        }
-      }
-    }
-    
-    // Configure video element for best visibility
-    hostVideoEl.autoplay = true;
-    hostVideoEl.playsInline = true;
-    hostVideoEl.controls = true;
-    hostVideoEl.muted = false; // Ensure host audio is heard
-    hostVideoEl.style.objectFit = 'contain'; // Ensure the entire video is visible
-    
-    // Force play for best compatibility
-    hostVideoEl.play().catch(err => {
-      console.warn('⚠️ Could not autoplay host video:', err);
-      
-      // Try again after a short delay (sometimes helps with browser restrictions)
-      setTimeout(() => {
-        hostVideoEl.play().catch(delayedErr => {
-          console.warn('⚠️ Still could not autoplay host video after delay:', delayedErr);
-        });
-      }, 1000);
+
+    // 2) Replace only same-kind
+    composite
+      .getTracks()
+      .filter((t) => t.kind === kind)
+      .forEach((t) => { try { composite.removeTrack(t); } catch {} });
+    try { composite.addTrack(event.track); } catch (e) { console.error('addTrack failed', e); }
+
+    // 3) Bind and prep for autoplay
+    if (el.srcObject !== composite) el.srcObject = composite;
+    el.autoplay = true;
+    el.playsInline = true;
+    el.muted = true; // allow autoplay; can show unmute button in UI
+    try { el.removeAttribute('controls'); } catch {}
+
+    const tryPlay = () => el.play().catch(() => {
+      const resume = () => { el.play().catch(() => {}); cleanup(); };
+      const cleanup = () => ['click','touchstart','keydown'].forEach(ev => window.removeEventListener(ev, resume));
+      ['click','touchstart','keydown'].forEach(ev => window.addEventListener(ev, resume, { once: true }));
     });
-    
-    // Log when video is actually playing
-    hostVideoEl.onplaying = () => {
-      console.log('▶️ Host video is now playing for co-host');
-    };
-    
-    // Log metadata when loaded
-    hostVideoEl.onloadedmetadata = () => {
-      console.log('📊 Host video metadata loaded:', {
-        width: hostVideoEl.videoWidth,
-        height: hostVideoEl.videoHeight
-      });
-    };
-    
-    // Log any errors
-    hostVideoEl.onerror = (e) => {
-      console.error('❌ Host video element error:', e);
-    };
+    tryPlay();
+
+    // log track counts
+    const vids = composite.getVideoTracks().length;
+    const auds = composite.getAudioTracks().length;
+    console.log('[cohost] ontrack:', kind, { vids, auds });
   };
+
+  // Periodic inbound stats
+  const statsTimer = setInterval(async () => {
+    try {
+      const stats = await pc.getStats();
+      let frames = 0, width = 0, height = 0;
+      stats.forEach((r: any) => {
+        if (r.type === 'inbound-rtp' && r.kind === 'video') {
+          frames = r.framesDecoded || frames;
+        }
+        if (r.type === 'track' && r.kind === 'video') {
+          width = r.frameWidth || width;
+          height = r.frameHeight || height;
+        }
+      });
+      console.log('[cohost] inbound stats', { framesDecoded: frames, frameSize: width && height ? `${width}x${height}` : undefined });
+    } catch {}
+  }, 5000);
   
   // ICE handling
   pc.onicecandidate = async (event) => {
@@ -1095,11 +1125,24 @@ export async function coHostJoinStream(
     }
   };
 
+  // Perfect negotiation flags
+  let makingOffer = false;
+  pc.onnegotiationneeded = async () => {
+    if (makingOffer) return;
+    makingOffer = true;
+    try {
+      console.log('[cohostPC] 🧩 negotiationneeded (noop): renegotiation not wired to Firestore updates; skipping');
+      // Note: renegotiation offers are not propagated in current signaling flow.
+    } finally { makingOffer = false; }
+  };
+
   // Create and send offer to host
   try {
-    console.log('📝 Creating offer for host');
+    console.log('[cohostPC] 📝 Creating offer for host');
+    makingOffer = true;
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    makingOffer = false;
     
     // Send offer to host
     console.log('📤 Sending offer to host');
@@ -1243,7 +1286,7 @@ export async function coHostJoinStream(
   
   // Set remote description from answer
   try {
-    console.log('📝 Setting remote description from host answer');
+    console.log('[cohostPC] 📝 Setting remote description from host answer');
     await pc.setRemoteDescription(new RTCSessionDescription(answerData as RTCSessionDescriptionInit));
   } catch (err) {
     console.error('❌ Failed to set remote description:', err);
@@ -1290,6 +1333,7 @@ export async function coHostJoinStream(
   // Connection state monitoring
   pc.onconnectionstatechange = async () => {
     console.log('🔗 CoHost-Host connection state:', pc.connectionState);
+    logSenders(`onconnectionstatechange:${pc.connectionState}`);
     
     try {
       // Update connection state in Firestore
@@ -1353,7 +1397,8 @@ export async function coHostJoinStream(
     pc,
     cleanup: () => {
       try {
-        unsubHostCandidates();
+  unsubHostCandidates();
+  clearInterval(statsTimer);
         pc.close();
       } catch (err) {
         console.error('❌ Error during cleanup:', err);

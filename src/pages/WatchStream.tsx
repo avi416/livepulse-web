@@ -27,6 +27,7 @@ export default function WatchStream() {
   const [isCoHost, setIsCoHost] = useState(false);
   const [coHostCleanup, setCoHostCleanup] = useState<(() => void) | null>(null);
   const { stream: localStream, start: startLocalMedia, stop: stopLocalMedia } = useLocalMedia();
+  const [isHost, setIsHost] = useState(false);
 
   // Monitor join request status
   useEffect(() => {
@@ -48,6 +49,42 @@ export default function WatchStream() {
 
     return () => unsubscribe();
   }, [id, streamData, isCoHost]);
+
+  // Determine if current user is the host of this stream
+  useEffect(() => {
+    (async () => {
+      try {
+        const { getAuth } = await import('firebase/auth');
+        const auth = getAuth();
+        const uid = auth.currentUser?.uid;
+        const hostUid = streamData?.uid;
+        const host = Boolean(uid && hostUid && uid === hostUid);
+        if (host !== isHost) setIsHost(host);
+      } catch {}
+    })();
+  }, [streamData?.uid]);
+
+  // If we're the host: keep preview locked to localStream directly (never overwritten by WebRTC)
+  useEffect(() => {
+    if (!isHost) return;
+    if (!videoRef.current) return;
+    if (!localStream) return;
+    try {
+      const el = videoRef.current;
+      // Bind directly to camera/mic stream
+      if (el.srcObject !== localStream) {
+        el.srcObject = localStream;
+      }
+      el.autoplay = true;
+      el.playsInline = true;
+      el.controls = true;
+      el.muted = true; // host preview muted for autoplay
+      // Ensure playback
+      if (el.paused) {
+        el.play().catch(() => {});
+      }
+    } catch {}
+  }, [isHost, localStream]);
 
   // Start co-host connection when approved
   const handleCoHostConnect = async () => {
@@ -412,7 +449,9 @@ export default function WatchStream() {
   // Attempt connection once all preconditions are met
   useEffect(() => {
     if (!id) return;
-    if (isConnected) return;
+  if (isConnected) return;
+  // Host should not connect as viewer to own stream
+  if (isHost) return;
     if (!videoRef.current || !videoReady) return;
     if (streamData?.status !== 'live') return;
     if (connectingRef.current) return;
@@ -456,7 +495,7 @@ export default function WatchStream() {
       .finally(() => {
         connectingRef.current = false;
       });
-  }, [id, videoReady, streamData?.status, isConnected]);
+  }, [id, videoReady, streamData?.status, isConnected, isHost]);
   
   // Effect to restore host video if it gets lost during co-host connection
   useEffect(() => {

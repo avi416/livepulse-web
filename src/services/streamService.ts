@@ -48,7 +48,49 @@ export interface LiveStreamDoc {
 }
 
 /**
- * 📺 יצירת שידור חי חדש בפיירסטור
+ * Safely update a live stream document.
+ * - Strips undefined values
+ * - By default blocks unintended endedAt/status='ended' unless explicitly allowed
+ * - Logs the payload before writing
+ */
+export async function safeUpdateLiveStream(
+  id: string,
+  patch: Record<string, any>,
+  opts: { allowEnd?: boolean } = {}
+) {
+  const db = getFirestoreInstance();
+  const allowEnd = !!opts.allowEnd;
+
+  // Shallow clone and strip undefined
+  const payload: Record<string, any> = {};
+  Object.keys(patch).forEach((k) => {
+    const v = (patch as any)[k];
+    if (v !== undefined) payload[k] = v;
+  });
+
+  // Guard against accidental end markers unless allowed
+  if (!allowEnd) {
+    if ('endedAt' in payload) {
+      console.warn('🛑 Removing unintended endedAt from payload (allowEnd=false)');
+      delete payload.endedAt;
+    }
+    if (payload.status === 'ended') {
+      console.warn("� Removing unintended status='ended' from payload (allowEnd=false)");
+      delete payload.status;
+    }
+  }
+
+  // Diagnostics - redact serverTimestamp sentinel for readability if present
+  const logPayload = { ...payload } as any;
+  if ('lastSeen' in logPayload) logPayload.lastSeen = '[serverTimestamp()]';
+  if ('endedAt' in logPayload) logPayload.endedAt = '[serverTimestamp()]';
+  console.log('📝 safeUpdateLiveStream payload:', { id, payload: logPayload, allowEnd });
+
+  await updateDoc(doc(db, 'liveStreams', id), payload);
+}
+
+/**
+ * �📺 יצירת שידור חי חדש בפיירסטור
  */
 export async function startLiveStream(title: string): Promise<string> {
   const db = getFirestoreInstance();
@@ -69,7 +111,7 @@ export async function startLiveStream(title: string): Promise<string> {
       s1.forEach((d: any) => toEnd.set(d.id, d));
       s2.forEach((d: any) => toEnd.set(d.id, d));
       await Promise.all(Array.from(toEnd.values()).map(async (d: any) => {
-        try { await updateDoc(doc(db, 'liveStreams', d.id), { status: 'ended', endedAt: serverTimestamp() }); } catch {}
+        try { await safeUpdateLiveStream(d.id, { status: 'ended', endedAt: serverTimestamp() }, { allowEnd: true }); } catch {}
       }));
     } catch (e) {
       console.warn('⚠️ Failed to end previous lives for user:', e);
@@ -95,11 +137,10 @@ export async function startLiveStream(title: string): Promise<string> {
  * 🛑 סיום שידור חי
  */
 export async function endLiveStream(id: string): Promise<void> {
-  const db = getFirestoreInstance();
-  await updateDoc(doc(db, 'liveStreams', id), {
+  await safeUpdateLiveStream(id, {
     status: 'ended',
     endedAt: serverTimestamp(),
-  });
+  }, { allowEnd: true });
 }
 
 /**
@@ -242,24 +283,44 @@ export async function heartbeatLiveStream(id: string): Promise<void> {
     
     // Always update to 'live' status regardless of current state
     // This helps recover from incorrect status changes
-    console.log(`💓 Updating heartbeat for stream ${id}`);
-    await updateDoc(streamRef, { 
+    console.log(`💓 Preparing heartbeat payload for stream ${id}`);
+    const payload: any = {
+      // Note: serverTimestamp() is a sentinel, safe to send
       lastSeen: serverTimestamp(),
       status: 'live', // Force status to 'live'
-      heartbeatCount: (streamData.heartbeatCount || 0) + 1,
-      recoveredAt: streamData.status !== 'live' ? new Date().toISOString() : undefined
-    });
+      heartbeatCount: (streamData.heartbeatCount || 0) + 1
+    };
+    if (streamData.status !== 'live') {
+      // Only include if applicable; never send undefined
+      payload.recoveredAt = new Date().toISOString();
+    }
+
+    // Diagnostics: ensure no undefined values are present
+    const hasUndefined = Object.entries(payload).some(([, v]) => v === undefined);
+    if (hasUndefined) {
+      console.warn('⚠️ Stripping undefined fields from heartbeat payload');
+      Object.keys(payload).forEach((k) => {
+        if (payload[k] === undefined) delete payload[k];
+      });
+    }
+    // Log payload (replace sentinel for readability)
+    const logPayload = { ...payload, lastSeen: '[serverTimestamp()]' };
+    console.log('💓 Heartbeat updateDoc payload:', logPayload);
+
+    await updateDoc(streamRef, payload);
     console.log(`✅ Heartbeat updated for stream ${id}`);
   } catch (error) {
     console.error(`❌ Error during heartbeat for stream ${id}:`, error);
     
     // Try a more basic update as a fallback
     try {
-      await updateDoc(streamRef, { 
+      const fallbackPayload = { 
         lastSeen: new Date(), // Use client date as fallback
         status: 'live',
         errorRecovery: true
-      });
+      } as const;
+      console.log('💓 Heartbeat Fallback updateDoc payload:', fallbackPayload);
+      await updateDoc(streamRef, fallbackPayload);
       console.log(`✅ Fallback heartbeat updated for stream ${id}`);
     } catch (fallbackError) {
       console.error(`❌ Even fallback heartbeat failed for stream ${id}:`, fallbackError);

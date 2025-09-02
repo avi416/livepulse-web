@@ -1,5 +1,6 @@
-import { collection, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, Timestamp, where } from 'firebase/firestore';
 import { getAuthInstance, getFirestoreInstance } from './firebase';
+import { safeUpdateLiveStream } from './streamService';
 
 export type LiveStreamStatus = 'live' | 'ended';
 
@@ -46,11 +47,10 @@ export async function startLiveStream(title: string): Promise<string> {
 }
 
 export async function endLiveStream(id: string): Promise<void> {
-  const db = getFirestoreInstance();
-  await updateDoc(doc(db, 'liveStreams', id), {
+  await safeUpdateLiveStream(id, {
     status: 'ended',
     endedAt: serverTimestamp(),
-  });
+  }, { allowEnd: true });
 }
 
 export function subscribeToLiveStreams(onChange: (items: LiveStreamDoc[]) => void): () => void {
