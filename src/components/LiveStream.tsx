@@ -1,26 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { createBroadcasterPC, hostAcceptCoHost } from "../services/webrtcService";
-      
-      // Send a heartbeat immediately to ensure stream stays alive
-      try {
-        console.log("💓 Sending immediate heartbeat before accepting co-host...");
-        await heartbeatLiveStream(streamId);
-        console.log("✅ Pre-cohost heartbeat sent successfully");
-      } catch (err) {
-        console.error("❌ Pre-cohost heartbeat failed:", err);
-        // Continue anyway, we'll try to recover
-      }
-      
-      // Create a video element for the co-host with specific styling
-      const coHostVideoElement = document.createElement('video');
-      coHostVideoElement.autoPlay = true;
-      coHostVideoElement.playsInline = true;
-      coHostVideoElement.controls = true;
-      coHostVideoElement.muted = false; // Not muted by default
-      coHostVideoElement.style.objectFit = 'contain'; // Ensure full visibility
-      coHostVideoElement.style.width = '100%';
-      coHostVideoElement.style.height = '100%';
-      coHostVideoElement.style.backgroundColor = 'black';
 import { endLiveStream, heartbeatLiveStream, startLiveStream, getStreamById } from "../services/streamService";
 import { RequestsPanel, HostCohostController, StopLiveButton, LiveGrid, DebugPanel } from "./cohost";
 import type { CoHostConnection } from "../types/cohost";
@@ -250,7 +229,7 @@ export default function LiveStream() {
       console.log(`✅ Connection established with co-host ${uid}`);
       
       // Add a callback for remote tracks
-      pc.ontrack = (event) => {
+      pc.ontrack = (event: RTCTrackEvent) => {
         const stream = event.streams[0];
         console.log(`📡 Received co-host stream from ${uid}`, {
           stream: stream ? "valid stream" : "missing stream",
@@ -337,7 +316,7 @@ export default function LiveStream() {
         const cohostDoc = doc(collection(liveStreamDoc, 'cohost'), uid);
         
         await setDoc(cohostDoc, { 
-          hostError: `Failed to establish connection: ${error.message || 'Unknown error'}`,
+          hostError: `Failed to establish connection: ${error instanceof Error ? error.message : 'Unknown error'}`,
           errorTimestamp: new Date().toISOString()
         }, { merge: true });
         

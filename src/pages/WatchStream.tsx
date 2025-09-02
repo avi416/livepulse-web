@@ -306,12 +306,10 @@ export default function WatchStream() {
             hostVideo.style.display = 'block';
             
             // Check if the stream exists, if not and we have our saved stream, use that
-            if (!hostVideo.srcObject && originalStreamRef.current) {
-              console.log('🔄 Restoring host video stream from saved reference');
-              hostVideo.srcObject = originalStreamRef.current;
-            }
-            
-            // If the video is paused or frozen, try to play it
+          if (!hostVideo.srcObject && originalStreamRef.current) {
+            console.log('🔄 Restoring host video stream from saved reference');
+            hostVideo.srcObject = originalStreamRef.current;
+          }            // If the video is paused or frozen, try to play it
             if (hostVideo.paused || hostVideo.readyState < 3) {
               hostVideo.play().catch(err => {
                 console.warn(`⚠️ Could not play host video in co-host mode (${delay}ms check):`, err);

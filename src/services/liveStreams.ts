@@ -13,6 +13,14 @@ export interface LiveStreamDoc {
   startedAt: unknown; // Firestore Timestamp
   endedAt?: unknown;  // Firestore Timestamp
   lastSeen?: unknown; // Firestore Timestamp
+  // Additional properties for TypeScript compilation
+  cohosts?: Record<string, any>;
+  hostName?: string;
+  description?: string;
+  viewerCount?: number;
+  hasCoHost?: boolean;
+  errorRecovery?: boolean;
+  reconnectedAt?: string;
 }
 
 export async function startLiveStream(title: string): Promise<string> {

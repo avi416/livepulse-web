@@ -19,7 +19,6 @@ import Login from './pages/Login';
 import Viewer from "./pages/Viewer";
 // Register cohost components - critical for ensuring they're included in the build
 import './components/cohost';
-import { RequestToJoinButton } from './components/cohost';
 
 export default function App() {
   return (

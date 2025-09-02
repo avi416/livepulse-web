@@ -620,6 +620,7 @@ export async function hostAcceptCoHost(
         console.warn(`⚠️ Stream status is ${streamData.status}, attempting to fix...`);
         
         // Force update the stream status back to live
+        const { updateDoc, serverTimestamp } = await import('firebase/firestore');
         await updateDoc(liveStreamDoc, {
           status: 'live',
           lastSeen: serverTimestamp(),
