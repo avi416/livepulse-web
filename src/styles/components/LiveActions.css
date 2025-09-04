@@ -1,5 +1,47 @@
-/* LiveActions styles */
-.actions{display:flex;flex-direction:column;gap:10px;align-items:center}
-.actions button{width:44px;height:44px;border-radius:999px;background:rgba(255,255,255,0.9);border:1px solid rgba(14,165,233,0.08)}
-.actions button{transition:transform .14s ease, box-shadow .14s ease}
-.actions button:hover{transform:translateY(-4px);box-shadow:0 8px 18px rgba(10,132,255,0.12)}
+/*
+ * LiveActions component styles
+ */
+
+@import '../tokens.css';
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    align-items: center;
+}
+
+.action-buttons--compact {
+    flex-direction: row;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: var(--space-2);
+    border-radius: var(--radius-lg);
+}
+
+.action-buttons--compact .action-icon__count {
+    display: none;
+}
+
+.action-buttons .action-icon__button {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-full);
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-white);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-normal) var(--easing-standard);
+}
+
+.action-buttons .action-icon__button:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.action-buttons .action-icon__count {
+    color: var(--color-white);
+    font-size: var(--font-size-xs);
+    margin-top: var(--space-1);
+}

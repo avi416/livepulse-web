@@ -1,0 +1,42 @@
+/*
+ * VerticalFeed component styles
+ */
+
+@import '../tokens.css';
+
+.vertical-feed {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+.vertical-feed__container {
+    width: 100%;
+    max-width: var(--content-max-width);
+}
+
+.feed {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.feed--vertical {
+    height: calc(100vh - var(--header-height));
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+}
+
+.feed__item {
+    width: 100%;
+    height: calc(100vh - var(--header-height));
+    scroll-snap-align: start;
+}
+
+@media (min-width: 768px) {
+    .feed__item {
+        height: calc(100vh - var(--header-height));
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+    }
+}

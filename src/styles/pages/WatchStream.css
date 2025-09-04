@@ -1,0 +1,206 @@
+/* 
+ * WatchStream page styles
+ */
+
+@import '../tokens.css';
+
+.watch-stream {
+    padding-top: var(--space-12);
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--space-4);
+}
+
+.watch-stream__header {
+    display: flex;
+    align-items: center;
+    margin-bottom: var(--space-6);
+    gap: var(--space-3);
+}
+
+.watch-stream__title {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.watch-stream__live-indicator {
+    display: flex;
+    align-items: center;
+}
+
+.watch-stream__live-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--color-error);
+    border-radius: 50%;
+    margin-right: var(--space-2);
+    animation: pulse 1.5s infinite;
+}
+
+.watch-stream__live-text {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-error);
+}
+
+.watch-stream__video-container {
+    position: relative;
+    width: 100%;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background-color: var(--color-gray-900);
+}
+
+.watch-stream__video {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background-color: var(--color-gray-900);
+}
+
+/* Video grid layout for side-by-side videos */
+.video-grid {
+    display: flex;
+    flex-direction: row;
+    gap: 16px;
+    width: 100%;
+}
+
+.video-grid__item {
+    flex: 1;
+    min-width: 0;
+    /* Prevents flex items from overflowing */
+    position: relative;
+}
+
+/* Keep aspect ratio consistent */
+.video-wrapper {
+    position: relative;
+    width: 100%;
+    height: 0;
+    padding-bottom: 56.25%;
+    /* 16:9 Aspect Ratio */
+    overflow: hidden;
+    border-radius: 8px;
+    background-color: #000;
+}
+
+.video-wrapper video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.watch-stream__sidebar {
+    position: absolute;
+    right: var(--space-4);
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.watch-stream__loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: var(--space-8);
+}
+
+.watch-stream__spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--color-secondary);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: var(--space-2);
+}
+
+.watch-stream__loading-text {
+    color: var(--color-secondary);
+}
+
+.watch-stream__empty {
+    padding: var(--space-8);
+    text-align: center;
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+}
+
+.watch-stream__empty-title {
+    color: var(--text-secondary);
+    font-size: var(--font-size-lg);
+    margin-bottom: var(--space-2);
+}
+
+.watch-stream__empty-subtitle {
+    color: var(--text-tertiary);
+}
+
+.watch-stream__info {
+    margin-top: var(--space-4);
+}
+
+.watch-stream__host {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+}
+
+.watch-stream__host-name {
+    font-weight: var(--font-weight-medium);
+}
+
+.watch-stream__host-viewers {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+}
+
+.watch-stream__actions {
+    margin-top: var(--space-4);
+    display: flex;
+    gap: var(--space-3);
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.6;
+        transform: scale(1.2);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .watch-stream__sidebar {
+        position: relative;
+        right: auto;
+        top: auto;
+        transform: none;
+        display: flex;
+        justify-content: space-around;
+        margin-top: var(--space-4);
+    }
+}

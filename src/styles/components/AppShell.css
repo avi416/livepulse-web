@@ -1,4 +1,110 @@
-/* AppShell styles */
-.appShell{min-height:100vh;background:var(--bg);color:var(--text)}
+/* 
+ * AppShell component styles 
+ */
 
-.appShell .sideCard{border-radius:12px;padding:8px}
+@import '../tokens.css';
+
+.app-shell {
+    display: grid;
+    min-height: 100vh;
+    width: 100%;
+    background-color: var(--dark-bg, #000);
+    color: var(--dark-text-primary, #fff);
+}
+
+/* Desktop layout: left nav, main content, right sidebar */
+@media (min-width: 1024px) {
+    .app-shell {
+        grid-template-areas:
+            "topbar topbar topbar"
+            "nav main sidebar";
+        grid-template-columns: var(--nav-width, 240px) 1fr auto;
+        grid-template-rows: var(--header-height, 60px) 1fr;
+    }
+
+    .mobile-nav {
+        display: none;
+    }
+}
+
+/* Tablet layout: main content with hidden sidebars */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .app-shell {
+        grid-template-areas:
+            "topbar topbar"
+            "main main";
+        grid-template-columns: 1fr;
+        grid-template-rows: var(--header-height) 1fr;
+    }
+
+    .left-nav {
+        display: none;
+    }
+
+    .action-rail {
+        display: none;
+    }
+}
+
+/* Mobile layout: full screen content with bottom navigation */
+@media (max-width: 767px) {
+    .app-shell {
+        grid-template-areas:
+            "topbar"
+            "main";
+        grid-template-columns: 1fr;
+        grid-template-rows: var(--header-height) 1fr;
+    }
+
+    .left-nav {
+        display: none;
+    }
+
+    .action-rail {
+        display: none;
+    }
+
+    .main-content {
+        margin-bottom: 50px;
+        /* Space for the mobile navigation */
+    }
+}
+
+.topbar {
+    grid-area: topbar;
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+    height: var(--header-height, 60px);
+    background-color: var(--dark-bg, #000);
+    border-bottom: 1px solid var(--dark-border, #333);
+}
+
+.left-nav {
+    grid-area: nav;
+    height: calc(100vh - var(--header-height, 60px));
+    position: sticky;
+    top: var(--header-height, 60px);
+    overflow-y: auto;
+    border-right: 1px solid var(--dark-border, #333);
+}
+
+.main-content {
+    grid-area: main;
+    min-height: calc(100vh - var(--header-height, 60px));
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    background-color: var(--dark-bg, #000);
+}
+
+.action-rail {
+    grid-area: sidebar;
+    height: calc(100vh - var(--header-height));
+    position: sticky;
+    top: var(--header-height);
+    width: var(--sidebar-width);
+    overflow-y: auto;
+    padding: var(--space-4);
+}

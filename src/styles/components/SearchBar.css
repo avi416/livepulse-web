@@ -1,10 +1,7 @@
-/* SearchBar styles */
-.search {
-  width:100%;
-}
+/* 
+ * SearchBar component styles 
+ */
 
-.search input{
-  width:100%;padding:8px 12px;border-radius:999px;border:1px solid rgba(14,165,233,0.15);background:transparent;color:inherit;
-}
+@import '../tokens.css';
 
-.search input::placeholder{color:var(--muted)}
+/* SearchBar styles are fully defined in components.css */

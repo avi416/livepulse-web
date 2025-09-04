@@ -1,0 +1,86 @@
+/*
+ * LeftNav component styles - Dark Theme
+ */
+
+@import '../tokens.css';
+@import '../tiktok.css';
+
+.left-nav__container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: var(--space-2) var(--space-2) var(--space-4);
+    border-right: 1px solid var(--dark-border, #333);
+    background-color: var(--dark-bg, #000);
+}
+
+.left-nav__logo {
+    padding: var(--space-4) var(--space-2);
+    margin-bottom: var(--space-6);
+    display: flex;
+    justify-content: center;
+}
+
+.left-nav__logo-link {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background-color: var(--accent-red, #ff2c55);
+    color: var(--dark-text-primary, #fff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-lg);
+    text-decoration: none;
+}
+
+.left-nav__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.left-nav__item {
+    width: 100%;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg);
+    color: var(--dark-text-primary, #fff);
+    text-decoration: none;
+    transition: color var(--transition-fast) var(--easing-standard);
+}
+
+.nav-item:hover {
+    color: var(--accent-red, #ff2c55);
+}
+
+.nav-item--active {
+    color: var(--accent-red, #ff2c55);
+    font-weight: var(--font-weight-medium);
+}
+
+.nav-item--active .nav-item__icon {
+    color: var(--accent-red, #ff2c55);
+}
+
+.nav-item__icon {
+    margin-right: var(--space-3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Mobile and Tablet styles */
+@media (max-width: 1023px) {
+    .left-nav__container {
+        display: none;
+    }
+}

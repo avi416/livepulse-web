@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useProfile } from '../hooks/useProfile';
+import '../styles/pages/Profile.css';
+import UserAvatar from '../components/UserAvatar';
 
 export default function Profile() {
   const { handle } = useParams();
@@ -12,9 +14,9 @@ export default function Profile() {
     if (error === 'not-authenticated') navigate('/login');
   }, [error, navigate]);
 
-  if (loading) return <div className="pt-12 p-4 text-center">Loading profile...</div>;
-  if (error) return <div className="pt-12 p-4 text-center text-red-400">Error: {error}</div>;
-  if (!user) return <div className="pt-12 p-4 text-center">Profile not found</div>;
+  if (loading) return <div className="profile profile--loading">Loading profile...</div>;
+  if (error) return <div className="profile profile--error">Error: {error}</div>;
+  if (!user) return <div className="profile profile--not-found">Profile not found</div>;
 
   let created: Date | undefined;
   const createdRaw = (user as unknown as { createdAt?: number | { seconds?: number } | undefined }).createdAt;
@@ -24,19 +26,36 @@ export default function Profile() {
   } else created = undefined;
 
   return (
-    <div className="pt-12 min-h-screen flex items-start justify-center">
-      <div className="mt-8 w-full max-w-lg bg-gray-900 text-white rounded-lg p-6 shadow-lg">
-        <div className="flex items-center gap-4">
-          <div className="w-20 h-20 bg-blue-300 rounded-full flex items-center justify-center text-xl font-bold text-white">{user.name?.charAt(0) ?? '?'}</div>
-          <div>
-            <div className="text-2xl font-semibold">{user.name}</div>
-            <div className="text-sm text-gray-300">{(user as unknown as { email?: string }).email}</div>
+    <div className="profile">
+      <div className="profile__card">
+        <div className="profile__header">
+          <div className="profile__avatar">
+            {(user as any).photoURL ? (
+              <UserAvatar
+                photoURL={(user as any).photoURL}
+                displayName={user.name}
+                email={(user as any).email}
+                size={80}
+              />
+            ) : (
+              <div className="avatar avatar--lg">{user.name?.charAt(0) ?? '?'}</div>
+            )}
+          </div>
+          <div className="profile__info">
+            <h1 className="profile__name">{user.name}</h1>
+            <div className="profile__email">{(user as unknown as { email?: string }).email}</div>
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-4 text-sm text-gray-300">
-          <div className="p-3 bg-gray-800 rounded">Role: <span className="font-medium text-white">{user.role}</span></div>
-          <div className="p-3 bg-gray-800 rounded">Joined: <span className="font-medium text-white">{created ? created.toLocaleDateString() : '—'}</span></div>
+        <div className="profile__details">
+          <div className="profile__detail">
+            <span className="profile__detail-label">Role</span>
+            <span className="profile__detail-value">{user.role}</span>
+          </div>
+          <div className="profile__detail">
+            <span className="profile__detail-label">Joined</span>
+            <span className="profile__detail-value">{created ? created.toLocaleDateString() : '—'}</span>
+          </div>
         </div>
       </div>
     </div>

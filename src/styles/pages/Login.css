@@ -1,0 +1,105 @@
+/* 
+ * Login page styles
+ */
+
+@import '../tokens.css';
+
+.login {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-primary);
+}
+
+.login__card {
+    width: 100%;
+    max-width: 28rem;
+    padding: var(--space-6);
+    border-radius: var(--radius-lg);
+    background-color: var(--bg-secondary);
+    box-shadow: var(--shadow-md);
+}
+
+.login__title {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-4);
+    color: var(--text-primary);
+}
+
+.login__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.form-field {
+    width: 100%;
+}
+
+.form-field__input {
+    width: 100%;
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-3);
+    background-color: transparent;
+    border: 1px solid var(--border-light);
+    color: var(--text-primary);
+}
+
+.form-field__input::placeholder {
+    color: var(--text-tertiary);
+    opacity: 0.6;
+}
+
+.form-field__input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), 0.2);
+}
+
+.login__error {
+    color: var(--color-error);
+    font-size: var(--font-size-sm);
+}
+
+.login__divider {
+    margin: var(--space-4) 0;
+    border-top: 1px solid var(--border-light);
+}
+
+.button--outline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    background-color: transparent;
+    border: 1px solid var(--border-light);
+    color: var(--text-primary);
+}
+
+.button--outline:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.button__icon {
+    width: var(--icon-sm);
+    height: var(--icon-sm);
+}
+
+.login__signup-prompt {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin-top: var(--space-4);
+    text-align: center;
+}
+
+.login__signup-link {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: var(--font-weight-medium);
+}
+
+.login__signup-link:hover {
+    text-decoration: underline;
+}

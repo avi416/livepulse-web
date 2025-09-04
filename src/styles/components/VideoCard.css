@@ -1,0 +1,74 @@
+/*
+ * LiveCard component styles
+ */
+
+@import '../tokens.css';
+
+.video-card {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background-color: var(--bg-tertiary);
+}
+
+.video-card__media {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.video-card__placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4rem;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.video-card__gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top,
+            rgba(0, 0, 0, 0.8) 0%,
+            rgba(0, 0, 0, 0.4) 30%,
+            rgba(0, 0, 0, 0) 60%);
+}
+
+.video-card__meta {
+    position: absolute;
+    left: var(--space-4);
+    bottom: var(--space-4);
+    z-index: 10;
+}
+
+.video-card__actions {
+    position: absolute;
+    right: var(--space-4);
+    bottom: var(--space-20);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+@media (max-width: 768px) {
+    .video-card__actions {
+        bottom: var(--space-4);
+    }
+
+    .video-card__actions--desktop {
+        display: none;
+    }
+}
+
+@media (min-width: 769px) {
+    .video-card__actions--mobile {
+        display: none;
+    }
+}

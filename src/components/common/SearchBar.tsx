@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Search } from 'lucide-react';
 import '../../styles/components/SearchBar.css';
 
 type Props = {
@@ -20,14 +21,17 @@ export default function SearchBar({ value: valueProp, onChange, onSubmit }: Prop
   }
 
   return (
-    <form onSubmit={handleSubmit} className="search">
+    <form onSubmit={handleSubmit} className="search-bar">
+      <span className="search-bar__icon">
+        <Search size={16} />
+      </span>
       <input
         value={value}
         onChange={(e) => {
           setValue(e.target.value);
           onChange?.(e.target.value);
         }}
-        className="w-full px-3 py-2 rounded-full bg-transparent text-inherit placeholder:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--primary)]"
+        className="search-bar__input"
         placeholder="Search"
         aria-label="Search"
       />

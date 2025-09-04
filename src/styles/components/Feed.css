@@ -1,0 +1,70 @@
+/* 
+ * Feed components specific styles 
+ */
+
+@import '../tokens.css';
+
+/* Section titles */
+.feed__section-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-4);
+    color: var(--text-primary);
+}
+
+/* Empty state */
+.feed__empty {
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
+    text-align: center;
+    padding: var(--space-8);
+}
+
+/* Video card placeholder for thumbnails */
+.video-card__placeholder {
+    width: 100%;
+    height: 100%;
+    background-color: var(--bg-tertiary);
+    background-image: linear-gradient(135deg,
+            var(--bg-tertiary) 0%,
+            var(--bg-secondary) 50%,
+            var(--bg-tertiary) 100%);
+}
+
+/* Vertical feed specific styles */
+.feed--vertical .video-card {
+    width: 100%;
+    max-width: var(--content-max-width);
+    margin: 0 auto;
+    height: calc(100vh - var(--header-height));
+}
+
+.feed--vertical .video-card__media {
+    height: 100%;
+}
+
+/* Grid feed specific styles */
+.feed--grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-3);
+}
+
+@media (max-width: 768px) {
+    .feed--grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .feed--grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Live badge positioning on cards */
+.video-card .live-badge {
+    position: absolute;
+    top: var(--space-3);
+    left: var(--space-3);
+}

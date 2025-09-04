@@ -1,29 +1,69 @@
 import { useEffect } from 'react';
-import '../styles/components/AppShell.css';
-import { Outlet } from 'react-router-dom';
+import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Home, Search, PlusCircle, Users, User } from 'lucide-react';
 import Topbar from '../components/layout/Topbar';
 import LeftNav from '../components/layout/LeftNav';
 import ActionRail from '../components/layout/ActionRail';
 
 export default function AppShell() {
   useEffect(() => {
-    // default to light theme with white background
+    // Always use dark theme to match the design
     document.documentElement.setAttribute('data-theme', 'dark');
   }, []);
 
+  const location = useLocation();
+  const currentPath = location.pathname;
+
   return (
-    <div className="appShell min-h-screen bg-[var(--bg)] text-black">
-      <Topbar />
-      <div className="pt-18">
-        <div className="mx-auto max-w-[1300px] px-2 md:px-4 lg:px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-[200px_minmax(560px,600px)_200px] xl:grid-cols-[240px_minmax(560px,600px)_260px] gap-4">
-            <div className="lg:block"><LeftNav /></div>
-            <main className="min-h-[calc(100vh-2rem)]"><Outlet /></main>
-            <div className="lg:block"><ActionRail /></div>
-          </div>
-        </div>
+    <div className="app-shell">
+      <header className="topbar">
+        <Topbar />
+      </header>
+
+      <nav className="left-nav">
+        <LeftNav />
+      </nav>
+
+      <main className="main-content">
+        <Outlet />
+      </main>
+
+      <aside className="action-rail">
+        <ActionRail />
+      </aside>
+
+      <div className="mobile-nav">
+        <Link to="/" className={`mobile-nav__item ${currentPath === '/' ? 'mobile-nav__item--active' : ''}`}>
+          <span className="mobile-nav__icon">
+            <Home size={24} strokeWidth={2} />
+          </span>
+          <span className="mobile-nav__label">Home</span>
+        </Link>
+        <Link to="/explore" className={`mobile-nav__item ${currentPath === '/explore' ? 'mobile-nav__item--active' : ''}`}>
+          <span className="mobile-nav__icon">
+            <Search size={24} strokeWidth={2} />
+          </span>
+          <span className="mobile-nav__label">Discover</span>
+        </Link>
+        <Link to="/live/go" className={`mobile-nav__item ${currentPath === '/live/go' ? 'mobile-nav__item--active' : ''}`}>
+          <span className="mobile-nav__icon">
+            <PlusCircle size={24} strokeWidth={2} />
+          </span>
+          <span className="mobile-nav__label">Create</span>
+        </Link>
+        <Link to="/following" className={`mobile-nav__item ${currentPath === '/following' ? 'mobile-nav__item--active' : ''}`}>
+          <span className="mobile-nav__icon">
+            <Users size={24} strokeWidth={2} />
+          </span>
+          <span className="mobile-nav__label">Following</span>
+        </Link>
+        <Link to="/profile/me" className={`mobile-nav__item ${currentPath.startsWith('/profile') ? 'mobile-nav__item--active' : ''}`}>
+          <span className="mobile-nav__icon">
+            <User size={24} strokeWidth={2} />
+          </span>
+          <span className="mobile-nav__label">Profile</span>
+        </Link>
       </div>
-  {/* mobile bottom bar removed to keep sidebar fixed on left */}
     </div>
   );
 }

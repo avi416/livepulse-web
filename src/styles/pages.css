@@ -1,0 +1,315 @@
+/* 
+ * Page-specific styles for OnlineChats
+ */
+
+@import './tokens.css';
+
+/* ==========================================================================
+   Home Page
+   ========================================================================== */
+
+.page-home {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.page-home__feed {
+    width: 100%;
+    max-width: var(--content-max-width);
+}
+
+/* ==========================================================================
+   Profile Page
+   ========================================================================== */
+
+.page-profile {
+    width: 100%;
+}
+
+.profile-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--space-6) var(--space-4);
+}
+
+.profile-header__avatar {
+    margin-bottom: var(--space-4);
+}
+
+.profile-header__name {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-1);
+}
+
+.profile-header__handle {
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-4);
+}
+
+.profile-header__stats {
+    display: flex;
+    gap: var(--space-6);
+    margin-bottom: var(--space-4);
+}
+
+.profile-header__stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.profile-header__stat-value {
+    font-weight: var(--font-weight-bold);
+}
+
+.profile-header__stat-label {
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
+}
+
+.profile-header__bio {
+    text-align: center;
+    margin-bottom: var(--space-4);
+    max-width: 400px;
+}
+
+.profile-content {
+    border-top: 1px solid var(--divider);
+}
+
+/* ==========================================================================
+   Explore Page
+   ========================================================================== */
+
+.page-explore {
+    padding: var(--space-4);
+}
+
+.explore-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-3);
+}
+
+@media (max-width: 768px) {
+    .explore-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .explore-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ==========================================================================
+   Go Live Page
+   ========================================================================== */
+
+.page-go-live {
+    padding: var(--space-4);
+}
+
+.livestream-preview {
+    aspect-ratio: 9/16;
+    max-height: 80vh;
+    background-color: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    position: relative;
+    margin-bottom: var(--space-4);
+}
+
+.livestream-controls {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* ==========================================================================
+   Watch Stream Page
+   ========================================================================== */
+
+.page-watch-stream {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.stream-player {
+    flex: 1;
+    position: relative;
+    background-color: var(--bg-tertiary);
+    overflow: hidden;
+}
+
+.stream-player__video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.stream-info {
+    padding: var(--space-4);
+    border-bottom: 1px solid var(--divider);
+}
+
+.stream-info__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-3);
+}
+
+.stream-info__title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-2);
+}
+
+.stream-info__meta {
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
+}
+
+.stream-info__stats {
+    display: flex;
+    gap: var(--space-4);
+}
+
+.stream-info__stat {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.stream-actions {
+    display: flex;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border-bottom: 1px solid var(--divider);
+}
+
+.stream-comments {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-4);
+}
+
+/* ==========================================================================
+   Login / Register Pages
+   ========================================================================== */
+
+.page-auth {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-4);
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 400px;
+    padding: var(--space-6);
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+}
+
+.auth-card__logo {
+    margin-bottom: var(--space-6);
+    text-align: center;
+}
+
+.auth-card__title {
+    font-size: var(--font-size-2xl);
+    margin-bottom: var(--space-4);
+    text-align: center;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.form-group__label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+.form-group__input {
+    padding: var(--space-3);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    margin: var(--space-4) 0;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: "";
+    flex: 1;
+    border-bottom: 1px solid var(--divider);
+}
+
+.auth-divider__text {
+    padding: 0 var(--space-3);
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
+}
+
+.auth-footer {
+    margin-top: var(--space-4);
+    text-align: center;
+    font-size: var(--font-size-sm);
+}
+
+.auth-footer__link {
+    color: var(--color-primary);
+}
+
+/* ==========================================================================
+   Not Found Page
+   ========================================================================== */
+
+.page-not-found {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - var(--header-height));
+    padding: var(--space-4);
+    text-align: center;
+}
+
+.page-not-found__code {
+    font-size: var(--font-size-4xl);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-2);
+}
+
+.page-not-found__title {
+    font-size: var(--font-size-2xl);
+    margin-bottom: var(--space-4);
+}
+
+.page-not-found__text {
+    margin-bottom: var(--space-6);
+    max-width: 400px;
+}

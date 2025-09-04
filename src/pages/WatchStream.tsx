@@ -8,6 +8,8 @@ import UserAvatar from '../components/UserAvatar';
 import { RequestToJoinButton, LeaveLiveButton } from '../components/cohost';
 import { subscribeToCurrentUserRequest } from '../services/streamService';
 import { useLocalMedia } from '../hooks/useLocalMedia';
+// Removed unused import: LiveInteractions
+import '../styles/pages/WatchStream.css';
 
 export default function WatchStream() {
   const { id } = useParams<{ id: string }>();
@@ -35,12 +37,12 @@ export default function WatchStream() {
 
     const unsubscribe = subscribeToCurrentUserRequest(id, (request) => {
       setJoinRequest(request);
-      
+
       // If request was approved, start co-host connection
       if (request?.status === 'approved' && !isCoHost) {
         handleCoHostConnect();
       }
-      
+
       // If request was rejected or cancelled, clean up co-host connection
       if ((request?.status === 'rejected' || request?.status === 'cancelled') && isCoHost) {
         cleanupCoHostConnection();
@@ -60,7 +62,7 @@ export default function WatchStream() {
         const hostUid = streamData?.uid;
         const host = Boolean(uid && hostUid && uid === hostUid);
         if (host !== isHost) setIsHost(host);
-      } catch {}
+      } catch { }
     })();
   }, [streamData?.uid]);
 
@@ -81,28 +83,28 @@ export default function WatchStream() {
       el.muted = true; // host preview muted for autoplay
       // Ensure playback
       if (el.paused) {
-        el.play().catch(() => {});
+        el.play().catch(() => { });
       }
-    } catch {}
+    } catch { }
   }, [isHost, localStream]);
 
   // Start co-host connection when approved
   const handleCoHostConnect = async () => {
     if (!id || !streamData || streamData.status !== 'live') return;
-    
+
     try {
       setConnectionStatus('Starting co-host connection...');
-      
+
       // Get local media stream
       let mediaStream = localStream;
-      
+
       // Make sure we have local media
       if (!mediaStream) {
         console.log('🎥 Starting local media for co-host connection...');
         try {
           mediaStream = await startLocalMedia();
           console.log('✅ Local media started successfully');
-          
+
           // Wait a bit to ensure stream is fully initialized
           await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (mediaError: any) {
@@ -111,7 +113,7 @@ export default function WatchStream() {
           return;
         }
       }
-      
+
       // Wait for local stream to be actually available
       let attempts = 0;
       const maxAttempts = 5;
@@ -121,12 +123,12 @@ export default function WatchStream() {
         await new Promise(resolve => setTimeout(resolve, 1000));
         attempts++;
       }
-      
+
       if (!mediaStream) {
         console.error('❌ Local stream is still null after waiting');
         throw new Error('Failed to get local media for co-host - stream is null');
       }
-      
+
       // Log track information to debug
       const trackInfo = mediaStream.getTracks().map(t => ({
         kind: t.kind,
@@ -135,62 +137,62 @@ export default function WatchStream() {
         readyState: t.readyState,
         id: t.id
       }));
-      
+
       console.log('🎥 Local media ready with tracks:', trackInfo);
-      
+
       if (trackInfo.length === 0) {
         console.error('❌ No tracks in local stream');
         throw new Error('No camera/microphone tracks available');
       }
-      
+
       // Show connecting indicator
       setConnectionStatus('Connecting to host as co-host...');
-      
+
       // Add timeout to abort if taking too long
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Connection timeout - taking too long to connect')), 60000);
       });
-      
+
       // Check if the video element is available
       if (!videoRef.current) {
         console.error('❌ Video element is not available for co-host connection');
         throw new Error('Video element not ready');
       }
-      
-      console.log('📡 Attempting to connect as co-host with stream tracks:', 
+
+      console.log('📡 Attempting to connect as co-host with stream tracks:',
         mediaStream.getTracks().map(t => `${t.kind} (${t.readyState})`).join(', '));
-      
+
       // Connect as co-host with timeout
       const connectPromise = connectAsCoHost(id, mediaStream, videoRef.current);
-      
+
       // Make sure the audio is unmuted in the local stream
       mediaStream.getAudioTracks().forEach(track => {
         track.enabled = true;
       });
-      
+
       // Make sure the video is enabled in the local stream
       mediaStream.getVideoTracks().forEach(track => {
         track.enabled = true;
       });
-      
+
       // First, check if stream is still live
       try {
         const { getFirestoreInstance } = await import('../services/firebase');
         const { doc, getDoc, updateDoc } = await import('firebase/firestore');
         const db = getFirestoreInstance();
-        
+
         // Verify stream is still live before attempting to connect
         const streamRef = doc(db, 'liveStreams', id);
         const streamSnap = await getDoc(streamRef);
-        
+
         if (!streamSnap.exists()) {
           throw new Error('Stream not found');
         }
-        
+
         const streamData = streamSnap.data();
         if (streamData.status !== 'live') {
           console.warn(`⚠️ Stream status is ${streamData.status}, attempting to fix...`);
-          
+
           // Try to refresh stream status if it's incorrectly marked as ended
           try {
             await updateDoc(streamRef, {
@@ -214,44 +216,44 @@ export default function WatchStream() {
         connectPromise,
         timeoutPromise as Promise<any>
       ]);
-      
+
       console.log('✅ Successfully connected as co-host!');
-      
+
       // Set up cleanup function
       const cleanup = () => {
-        try { unsubAnswer(); } catch {}
-        try { unsubHostICE(); } catch {}
-        try { pc.close(); } catch {}
-        try { stopLocalMedia(); } catch {}
+        try { unsubAnswer(); } catch { }
+        try { unsubHostICE(); } catch { }
+        try { pc.close(); } catch { }
+        try { stopLocalMedia(); } catch { }
       };
-      
+
       setCoHostCleanup(() => cleanup);
       setIsCoHost(true);
       setConnectionStatus('Co-hosting live!');
-      
+
       // IMPORTANT: Preserve the existing host video connection
       if (videoRef.current) {
         // Unmute the host video so we can hear them
         videoRef.current.muted = false;
-        
+
         // Make sure we don't lose the existing host video connection
         const hostVideo = document.getElementById('hostVideo') as HTMLVideoElement;
         if (hostVideo) {
           console.log('🔄 Ensuring host video continues to play');
           // Don't reset srcObject as that breaks the connection
-          
+
           // Just ensure it's playing and unmuted
           hostVideo.muted = false;
           if (hostVideo.paused) {
             hostVideo.play().catch(e => console.warn('⚠️ Host video play error:', e));
           }
-          
+
           // Apply any necessary styles to ensure visibility
           hostVideo.style.display = 'block';
           hostVideo.style.opacity = '1';
         }
       }
-      
+
       // Make sure local video is displayed properly
       const localVideo = document.getElementById('localVideo') as HTMLVideoElement;
       if (localVideo && mediaStream) {
@@ -259,7 +261,7 @@ export default function WatchStream() {
         localVideo.srcObject = mediaStream;
         localVideo.play().catch(e => console.warn('⚠️ Local video play error:', e));
       }
-      
+
       // Add connection state monitoring
       pc.onconnectionstatechange = () => {
         console.log(`🔄 Co-host connection state changed: ${pc.connectionState}`);
@@ -271,10 +273,10 @@ export default function WatchStream() {
       };
     } catch (error: any) {
       console.error('Failed to connect as co-host:', error);
-      
+
       // Provide more helpful error messages
       let errorMessage = 'Failed to connect as co-host';
-      
+
       if (error.message?.includes('Timeout waiting for host answer')) {
         errorMessage = 'Host did not respond to your join request. They may be busy or offline.';
       } else if (error.message?.includes('access')) {
@@ -282,12 +284,12 @@ export default function WatchStream() {
       } else if (error.message?.includes('Connection timeout')) {
         errorMessage = 'Connection timed out. The host may be offline or having network issues.';
       }
-      
+
       setConnectionStatus(errorMessage);
       cleanupCoHostConnection();
     }
   };
-  
+
   // Clean up co-host connection
   const cleanupCoHostConnection = () => {
     if (coHostCleanup) {
@@ -296,7 +298,7 @@ export default function WatchStream() {
     }
     setIsCoHost(false);
   };
-  
+
   // ref callback to detect when the <video> is mounted
   const setVideoRef = (el: HTMLVideoElement | null) => {
     videoRef.current = el;
@@ -308,11 +310,11 @@ export default function WatchStream() {
     if (!videoRef.current) return;
     const v = videoRef.current;
 
-  v.autoplay = true;
-  v.playsInline = true;
-  v.controls = true;
-  // keep muted for autoplay compliance; audio can be toggled by user
-  v.muted = true;
+    v.autoplay = true;
+    v.playsInline = true;
+    v.controls = true;
+    // keep muted for autoplay compliance; audio can be toggled by user
+    v.muted = true;
 
     v.onloadedmetadata = () => {
       console.log('🎥 loadedmetadata', {
@@ -329,7 +331,7 @@ export default function WatchStream() {
     if (isCoHost) {
       // Run checks at multiple intervals to ensure videos stay working
       const checkTimes = [100, 500, 1000, 2000, 5000];
-      
+
       checkTimes.forEach(delay => {
         setTimeout(() => {
           // Unmute and refresh host video
@@ -337,23 +339,23 @@ export default function WatchStream() {
           if (hostVideo) {
             console.log(`🔊 Setting up host video for co-host mode (${delay}ms check)`);
             hostVideo.muted = false;
-            
+
             // Force visible
             hostVideo.style.opacity = '1';
             hostVideo.style.display = 'block';
-            
+
             // Check if the stream exists, if not and we have our saved stream, use that
-          if (!hostVideo.srcObject && originalStreamRef.current) {
-            console.log('🔄 Restoring host video stream from saved reference');
-            hostVideo.srcObject = originalStreamRef.current;
-          }            // If the video is paused or frozen, try to play it
+            if (!hostVideo.srcObject && originalStreamRef.current) {
+              console.log('🔄 Restoring host video stream from saved reference');
+              hostVideo.srcObject = originalStreamRef.current;
+            }            // If the video is paused or frozen, try to play it
             if (hostVideo.paused || hostVideo.readyState < 3) {
               hostVideo.play().catch(err => {
                 console.warn(`⚠️ Could not play host video in co-host mode (${delay}ms check):`, err);
               });
             }
           }
-          
+
           // Make sure local video is displayed
           const localVideo = document.getElementById('localVideo') as HTMLVideoElement;
           if (localVideo && localStream) {
@@ -432,14 +434,14 @@ export default function WatchStream() {
       if (cleanupRef.current) {
         cleanupRef.current();
       }
-      
+
       // Also clean up co-host connection if active
       if (coHostCleanup) {
         coHostCleanup();
       }
-      
+
       // Clean up local media
-      try { stopLocalMedia(); } catch {}
+      try { stopLocalMedia(); } catch { }
     };
   }, [id]);
 
@@ -449,9 +451,9 @@ export default function WatchStream() {
   // Attempt connection once all preconditions are met
   useEffect(() => {
     if (!id) return;
-  if (isConnected) return;
-  // Host should not connect as viewer to own stream
-  if (isHost) return;
+    if (isConnected) return;
+    // Host should not connect as viewer to own stream
+    if (isHost) return;
     if (!videoRef.current || !videoReady) return;
     if (streamData?.status !== 'live') return;
     if (connectingRef.current) return;
@@ -459,26 +461,26 @@ export default function WatchStream() {
     const el = videoRef.current;
     connectingRef.current = true;
     setConnectionStatus('Connecting to stream…');
-    
+
     // Make sure video element is properly set up
     if (el) {
       el.autoplay = true;
       el.playsInline = true;
     }
-    
+
     connectAsViewer(id, el!)
       .then((result) => {
         console.log('✅ Connection successful:', result);
         setIsConnected(true);
         setConnectionStatus('Connected to stream');
         cleanupRef.current = result.cleanup;
-        
+
         // Save the original stream for potential restoration later
         if (el && el.srcObject instanceof MediaStream) {
           originalStreamRef.current = el.srcObject;
           console.log('💾 Saved original host stream for later restoration if needed');
         }
-        
+
         // Force play the video to ensure it's not frozen
         if (el && el.paused) {
           console.log('▶️ Forcing host video playback');
@@ -496,28 +498,28 @@ export default function WatchStream() {
         connectingRef.current = false;
       });
   }, [id, videoReady, streamData?.status, isConnected, isHost]);
-  
+
   // Effect to restore host video if it gets lost during co-host connection
   useEffect(() => {
     // Only run if we're co-hosting AND we have a saved original stream
     if (isCoHost && originalStreamRef.current && videoRef.current) {
       const checkHostVideo = () => {
         const hostVideo = document.getElementById('hostVideo') as HTMLVideoElement;
-        if (hostVideo && (!hostVideo.srcObject || 
-            hostVideo.srcObject instanceof MediaStream && 
-            (hostVideo.srcObject as MediaStream).getTracks().length === 0)) {
-          
+        if (hostVideo && (!hostVideo.srcObject ||
+          hostVideo.srcObject instanceof MediaStream &&
+          (hostVideo.srcObject as MediaStream).getTracks().length === 0)) {
+
           console.log('🔄 Host video stream lost after co-host connection - restoring from saved stream');
           hostVideo.srcObject = originalStreamRef.current;
           hostVideo.muted = false;
           hostVideo.play().catch(e => console.warn('⚠️ Error playing restored host video:', e));
         }
       };
-      
+
       // Check immediately and after a short delay to ensure it's caught
       checkHostVideo();
       const timeoutId = setTimeout(checkHostVideo, 2000);
-      
+
       return () => clearTimeout(timeoutId);
     }
   }, [isCoHost]);
@@ -561,30 +563,33 @@ export default function WatchStream() {
   }
 
   return (
-    <div className="pt-12 max-w-4xl mx-auto p-4">
+    <div className="watch-stream">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6 p-4 bg-[var(--panel)] rounded-lg">
+      <div className="watch-stream__header">
         <UserAvatar
           photoURL={streamData.photoURL}
           displayName={streamData.displayName}
           email={streamData.displayName}
           size={48}
         />
-        <div className="flex-1">
-          <h1 className="text-xl font-semibold text-white">{streamData.title}</h1>
-          <p className="text-[var(--muted)]">{streamData.displayName}</p>
+        <div className="watch-stream__title">
+          <h1>{streamData.title}</h1>
+          <p className="watch-stream__host-name">{streamData.displayName}</p>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <span className="px-3 py-1 bg-red-600 text-white text-sm font-medium rounded-full">LIVE</span>
-          
+        <div className="watch-stream__actions">
+          <div className="watch-stream__live-indicator">
+            <span className="watch-stream__live-dot"></span>
+            <span className="watch-stream__live-text">LIVE</span>
+          </div>
+
           {/* Request to Join Button */}
           {!isCoHost && (
             <RequestToJoinButton liveId={id!} status={streamData.status} />
           )}
-          
+
           {/* Leave stream button for co-hosts */}
           {isCoHost && (
-            <div className="mt-2">
+            <div>
               <LeaveLiveButton onLeave={cleanupCoHostConnection} />
             </div>
           )}
@@ -592,23 +597,22 @@ export default function WatchStream() {
       </div>
 
       {/* Status */}
-      <div className="mb-4 text-center">
+      <div className="text-center mb-4">
         <div
-          className={`inline-block px-3 py-1 rounded-full text-sm ${
-            isConnected ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'
-          }`}
+          className={`inline-block px-3 py-1 rounded-full text-sm ${isConnected ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'
+            }`}
         >
           {connectionStatus}
         </div>
       </div>
 
       {/* Video */}
-      <div className="flex justify-center mb-6">
-        {/* Video grid layout - changes based on co-hosting status */}
-        <div className={`grid ${isCoHost ? 'grid-cols-2 gap-4 w-full max-w-[1200px]' : 'grid-cols-1 w-full max-w-[600px]'}`}>
+      <div className="watch-stream__video-container">
+        {/* Video grid layout - always use flex for side-by-side */}
+        <div className={`video-grid ${!isCoHost ? 'justify-center' : ''}`}>
           {/* Host Stream */}
-          <div ref={containerRef} className="relative">
-            <div className="aspect-video w-full rounded-lg overflow-hidden bg-black relative border-2 border-blue-300 shadow-lg">
+          <div ref={containerRef} className={`video-grid__item ${!isCoHost ? 'max-w-3xl' : ''}`}>
+            <div className="video-wrapper">
               <video
                 id="hostVideo"
                 ref={setVideoRef}
@@ -616,8 +620,7 @@ export default function WatchStream() {
                 playsInline
                 controls
                 muted={!isCoHost} // Only mute if not in co-host mode
-                className="w-full h-full object-contain bg-black"
-                style={{ objectFit: 'contain' }}
+                className="watch-stream__video"
                 onLoadedMetadata={(e) => {
                   console.log('📊 Host video metadata loaded:', {
                     width: e.currentTarget.videoWidth,
@@ -638,7 +641,7 @@ export default function WatchStream() {
               >
                 Fullscreen
               </button>
-              
+
               {/* Host badge */}
               <div className="absolute top-2 left-2 z-10 px-3 py-1 text-xs rounded-full bg-gradient-to-r from-blue-600 to-blue-400 text-white font-bold shadow-sm">
                 Host
@@ -648,25 +651,25 @@ export default function WatchStream() {
 
           {/* Co-host mode - show your own stream */}
           {isCoHost && (
-            <div className="relative">
-              <div className="aspect-video w-full rounded-lg overflow-hidden bg-black border-2 border-green-300 shadow-lg">
+            <div className="video-grid__item">
+              <div className="video-wrapper border-2 border-green-300">
                 <video
                   id="localVideo"
                   autoPlay
                   playsInline
                   controls
-                  className="w-full h-full object-contain bg-black"
+                  className="watch-stream__video"
                   ref={(el) => {
                     if (el && localStream) {
                       console.log('📹 Setting local stream to video element');
                       // Make sure we're using a fresh stream object
                       el.srcObject = null;
                       el.srcObject = localStream;
-                      
+
                       // Try to play the video
                       el.play().catch(err => {
                         console.warn('⚠️ Could not autoplay local video:', err);
-                        
+
                         // Try again after a short delay
                         setTimeout(() => {
                           if (el.srcObject) {
@@ -676,12 +679,12 @@ export default function WatchStream() {
                           }
                         }, 1000);
                       });
-                      
+
                       // Log when video is actually playing
                       el.onplaying = () => {
                         console.log('▶️ Local video is now playing');
                       };
-                      
+
                       // Log metadata when loaded
                       el.onloadedmetadata = () => {
                         console.log('📊 Local video metadata loaded:', {
@@ -692,7 +695,7 @@ export default function WatchStream() {
                     }
                   }}
                 />
-                
+
                 {/* Co-host badge */}
                 <div className="absolute top-2 left-2 z-10 px-3 py-1 text-xs rounded-full bg-gradient-to-r from-green-600 to-green-400 text-white font-bold shadow-sm">
                   You (Co-host)
@@ -702,7 +705,7 @@ export default function WatchStream() {
           )}
         </div>
       </div>
-      
+
       {/* Co-host status */}
       {isCoHost && (
         <div className="mt-4 mb-6 p-3 bg-green-600/20 border border-green-600 rounded-md text-center">
@@ -710,7 +713,7 @@ export default function WatchStream() {
           <p className="text-sm text-[var(--muted)]">Your camera and microphone are being shared.</p>
         </div>
       )}
-      
+
       {/* Join request status */}
       {joinRequest && joinRequest.status === 'pending' && (
         <div className="mt-4 mb-6 p-3 bg-yellow-600/20 border border-yellow-600 rounded-md text-center">
@@ -718,7 +721,7 @@ export default function WatchStream() {
           <p className="text-sm text-[var(--muted)]">Waiting for the host to approve your request...</p>
         </div>
       )}
-      
+
       {joinRequest && joinRequest.status === 'rejected' && (
         <div className="mt-4 mb-6 p-3 bg-red-600/20 border border-red-600 rounded-md text-center">
           <p className="text-white font-medium">Your request to join was declined</p>

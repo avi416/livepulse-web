@@ -1,8 +1,30 @@
-/* FeedList styles */
-.feedContainer{
-  height: calc(100vh - 64px); overflow-y:auto; scroll-snap-type:y mandatory;
+/*
+ * FeedList component styles
+ */
+
+@import '../tokens.css';
+
+.feed__item-container {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.feedItem{scroll-snap-align:start}
+.feed__item-content {
+  aspect-ratio: 9/16;
+  width: 100%;
+  max-width: var(--content-max-width);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  background-color: var(--bg-tertiary);
+}
 
-.feedEnd{height:48px}
+@media (max-width: 768px) {
+  .feed__item-content {
+    height: 100%;
+    border-radius: 0;
+  }
+}

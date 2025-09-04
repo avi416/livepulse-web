@@ -1,0 +1,30 @@
+/* 
+ * NotFound page styles
+ */
+
+@import '../tokens.css';
+
+.not-found {
+    padding-top: var(--space-12);
+    max-width: 48rem;
+    margin: 0 auto;
+    padding: var(--space-4);
+    text-align: center;
+}
+
+.not-found__title {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.not-found__message {
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-4);
+}
+
+.not-found__button {
+    display: inline-block;
+    margin-top: var(--space-4);
+}

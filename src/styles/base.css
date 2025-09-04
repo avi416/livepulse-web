@@ -1,0 +1,306 @@
+/* 
+ * Base styles and resets for OnlineChats 
+ */
+
+@import './tokens.css';
+
+/* Box sizing */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+/* Reset margins */
+body,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+figure,
+blockquote,
+dl,
+dd {
+    margin: 0;
+}
+
+/* Set core body defaults */
+body {
+    min-height: 100vh;
+    font-family: var(--font-family);
+    font-size: var(--font-size-md);
+    line-height: var(--line-height-normal);
+    text-rendering: optimizeSpeed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    overflow-x: hidden;
+}
+
+/* Remove default padding */
+ul,
+ol {
+    padding: 0;
+    list-style: none;
+}
+
+/* Default link styles */
+a {
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: color var(--transition-fast) var(--easing-standard);
+}
+
+a:hover {
+    color: var(--color-primary);
+}
+
+/* Make images easier to work with */
+img,
+picture,
+video {
+    max-width: 100%;
+    display: block;
+}
+
+/* Natural flow and rhythm in articles by default */
+article>*+* {
+    margin-top: var(--space-4);
+}
+
+/* Inherit fonts for inputs and buttons */
+input,
+button,
+textarea,
+select {
+    font: inherit;
+    color: inherit;
+}
+
+/* Button resets */
+button {
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+}
+
+/* Form elements default styling */
+input,
+textarea {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-3);
+}
+
+input:focus,
+textarea:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
+    color: var(--text-primary);
+}
+
+h1 {
+    font-size: var(--font-size-4xl);
+}
+
+h2 {
+    font-size: var(--font-size-3xl);
+}
+
+h3 {
+    font-size: var(--font-size-2xl);
+}
+
+h4 {
+    font-size: var(--font-size-xl);
+}
+
+h5 {
+    font-size: var(--font-size-lg);
+}
+
+h6 {
+    font-size: var(--font-size-md);
+}
+
+/* Visually hide elements but keep them accessible to screen readers */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* Container */
+.container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+}
+
+@media (min-width: 640px) {
+    .container {
+        max-width: var(--container-sm);
+    }
+}
+
+@media (min-width: 768px) {
+    .container {
+        max-width: var(--container-md);
+    }
+}
+
+@media (min-width: 1024px) {
+    .container {
+        max-width: var(--container-lg);
+    }
+}
+
+@media (min-width: 1280px) {
+    .container {
+        max-width: var(--container-xl);
+    }
+}
+
+/* Layout helpers */
+.flex {
+    display: flex;
+}
+
+.flex-col {
+    flex-direction: column;
+}
+
+.items-center {
+    align-items: center;
+}
+
+.justify-center {
+    justify-content: center;
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.gap-1 {
+    gap: var(--space-1);
+}
+
+.gap-2 {
+    gap: var(--space-2);
+}
+
+.gap-3 {
+    gap: var(--space-3);
+}
+
+.gap-4 {
+    gap: var(--space-4);
+}
+
+/* Focus outline for accessibility */
+:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+/* Keyboard navigation indicator */
+body:not(.using-mouse) :focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+/* App shell layout */
+.app-shell {
+    display: grid;
+    min-height: 100vh;
+    width: 100%;
+    grid-template-areas:
+        "topbar topbar topbar"
+        "nav main sidebar";
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: var(--header-height) 1fr;
+    background-color: var(--color-gray-900);
+}
+
+@media (max-width: 1023px) {
+    .app-shell {
+        grid-template-areas:
+            "topbar topbar"
+            "main main";
+        grid-template-columns: 1fr;
+    }
+}
+
+.topbar {
+    grid-area: topbar;
+    z-index: 10;
+}
+
+.left-nav {
+    grid-area: nav;
+    display: none;
+}
+
+.main-content {
+    grid-area: main;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+}
+
+.action-rail {
+    grid-area: sidebar;
+    display: none;
+}
+
+/* Show desktop navigation on larger screens */
+@media (min-width: 1024px) {
+    .left-nav,
+    .action-rail {
+        display: block;
+    }
+
+    .mobile-nav {
+        display: none;
+    }
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

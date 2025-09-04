@@ -1,0 +1,108 @@
+/* 
+ * Profile page styles
+ */
+
+@import '../tokens.css';
+
+.profile {
+    padding-top: var(--space-12);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+.profile__card {
+    margin-top: var(--space-8);
+    width: 100%;
+    max-width: 32rem;
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    box-shadow: var(--shadow-lg);
+}
+
+.profile__header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.profile__avatar {
+    width: 5rem;
+    height: 5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-white);
+    background-color: var(--color-primary);
+}
+
+.profile__info {
+    flex: 1;
+}
+
+.profile__name {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.profile__email {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+}
+
+.profile__details {
+    margin-top: var(--space-6);
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+}
+
+.profile__detail {
+    padding: var(--space-3);
+    background-color: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+}
+
+.profile__detail-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+}
+
+.profile__detail-value {
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+}
+
+/* Loading, error, and not found states */
+.profile--loading,
+.profile--error,
+.profile--not-found {
+    text-align: center;
+    padding: var(--space-4);
+    padding-top: var(--space-12);
+}
+
+.profile--error {
+    color: var(--color-error);
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    .profile__card {
+        margin: var(--space-4);
+        padding: var(--space-4);
+    }
+
+    .profile__details {
+        grid-template-columns: 1fr;
+    }
+}

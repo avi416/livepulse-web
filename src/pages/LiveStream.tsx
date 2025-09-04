@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { createBroadcasterPC } from "../services/webrtcService";
 import { startLiveStream } from "../services/streamService";
+import LiveInteractions from "../components/live/LiveInteractions";
+import "../styles/pages/LiveStream.css";
 
 export default function LiveStream() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -33,28 +35,56 @@ export default function LiveStream() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white">
-      <h1 className="text-2xl font-bold mb-6">🎥 Live Stream</h1>
+    <div className="live-stream">
+      <h1 className="live-stream__title">Live Stream</h1>
 
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        className="w-[600px] max-w-full rounded-lg shadow-lg bg-black"
-      />
+      <div className="live-stream__video-container">
+        <div className="live-stream__video-grid">
+          <div className="live-stream__video-item">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="live-stream__video"
+            />
+            <div className="live-badge">Your Stream</div>
+          </div>
 
-      {!isLive && (
-        <button
-          onClick={startLive}
-          className="mt-6 px-6 py-3 bg-pink-600 rounded-lg text-lg hover:bg-pink-700"
-        >
-          Start Live
-        </button>
-      )}
+          {/* Placeholder for second stream (for layout consistency) */}
+          {isLive && (
+            <div className="live-stream__video-item live-stream__video-item--placeholder">
+              <div className="live-stream__video-placeholder">
+                <span>Waiting for co-host...</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {isLive && (
+          <div className="live-stream__interactions">
+            <LiveInteractions
+              initialLikes={124}
+              initialComments={32}
+              vertical={false}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="live-stream__controls">
+        {!isLive && (
+          <button
+            onClick={startLive}
+            className="live-stream__button"
+          >
+            Start Live
+          </button>
+        )}
+      </div>
 
       {streamId && (
-        <div className="mt-4 text-sm text-gray-300">Stream ID: {streamId}</div>
+        <div className="live-stream__info">Stream ID: {streamId}</div>
       )}
     </div>
   );

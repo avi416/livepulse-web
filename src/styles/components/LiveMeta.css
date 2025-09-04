@@ -1,6 +1,60 @@
-/* LiveMeta styles */
-.meta{max-width:70%}
-.meta .handle{color:var(--muted);font-size:13px}
-.meta .title{font-weight:700;font-size:18px}
-.meta .tags{display:flex;gap:8px;margin-top:8px}
-.meta .tag{background:rgba(14,165,233,0.08);color:var(--accent);padding:4px 8px;border-radius:999px;font-size:12px}
+/*
+ * LiveMeta component styles
+ */
+
+@import '../tokens.css';
+
+.video-meta {
+    color: var(--color-white);
+    max-width: 280px;
+}
+
+.video-meta__handle {
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-1);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.video-meta__viewers {
+    font-size: var(--font-size-xs);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.video-meta__title {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.video-meta__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.video-meta__tag {
+    font-size: var(--font-size-xs);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.live-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-1) var(--space-2);
+    background-color: var(--color-primary);
+    color: var(--color-white);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}

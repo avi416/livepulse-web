@@ -1,0 +1,53 @@
+/* 
+ * Explore page styles
+ */
+
+@import '../tokens.css';
+
+.explore {
+    max-width: var(--content-max-width, 80rem);
+    margin: var(--space-12) auto 0;
+    padding: var(--space-4);
+}
+
+.explore__search {
+    margin-bottom: var(--space-4);
+}
+
+.explore__tags {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+}
+
+.explore__tag {
+    padding: var(--space-6);
+    background-color: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    text-align: center;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+    transition: transform var(--transition-fast) var(--easing-standard),
+        background-color var(--transition-fast) var(--easing-standard);
+    cursor: pointer;
+}
+
+.explore__tag:hover {
+    background-color: var(--color-primary);
+    color: var(--color-white);
+    transform: translateY(-2px);
+}
+
+/* Media Queries */
+@media (min-width: 640px) {
+    .explore__tags {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (min-width: 768px) {
+    .explore__tags {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}

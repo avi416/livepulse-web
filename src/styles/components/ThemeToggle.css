@@ -1,0 +1,26 @@
+/*
+ * ThemeToggle component styles
+ */
+
+@import '../tokens.css';
+
+.theme-toggle {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+    background-color: var(--bg-tertiary);
+    transition: all var(--transition-fast) var(--easing-standard);
+}
+
+.theme-toggle:hover {
+    background-color: var(--bg-secondary);
+}
+
+.theme-toggle:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}

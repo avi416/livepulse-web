@@ -1,41 +1,186 @@
-/* Sidebar styles */
-/* Sidebar styles */
+/* Sidebar Component Styles */
 .sidebar {
   position: relative;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
-.sidebar{
-  position:relative;
+
+/* Sidebar search */
+.sidebar__search {
+  margin-bottom: var(--space-4);
 }
 
-.sidebar .mb-4{margin-bottom:1rem}
+.search--sidebar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background-color: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
 
-.nav{display:flex;flex-direction:column;gap:10px}
+.search__icon {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--text-tertiary);
+}
 
-.nav a{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;text-decoration:none;color:inherit}
+.search__input {
+  background: transparent;
+  border: none;
+  padding: var(--space-1) 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  width: 100%;
+  outline: none;
+}
 
-.nav a .w-8{display:flex;align-items:center;justify-content:center}
+/* Sidebar navigation */
+.sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
 
-.nav a.active{background:linear-gradient(90deg,var(--primary),var(--accent));color:white;font-weight:600;box-shadow:0 6px 18px rgba(10,132,255,0.12)}
+.sidebar__nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  color: var(--text-secondary);
+  position: relative;
+  transition: all var(--transition-fast) var(--easing-standard);
+}
 
-.nav a:hover{background:rgba(255,255,255,0.02)}
+.sidebar__nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-8);
+  height: var(--space-8);
+}
 
-/* fixed left panel on desktop */
-@media (min-width: 1024px){
+.sidebar__nav-icon svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+.sidebar__nav-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar__nav-item:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.sidebar__nav-item--active {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+  background-color: rgba(var(--color-primary-rgb), 0.1);
+}
+
+.sidebar__nav-active-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: var(--space-1);
+  border-top-right-radius: var(--radius-sm);
+  border-bottom-right-radius: var(--radius-sm);
+  background-color: var(--color-primary);
+}
+
+/* User section */
+.sidebar__user {
+  margin-top: var(--space-6);
+}
+
+.sidebar__user-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sidebar__user-profile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-tertiary);
+}
+
+.sidebar__user-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar__user-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar__user-email {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar__user-skeleton {
+  width: 100%;
+  padding: var(--space-4) var(--space-2);
+  border-radius: var(--radius-md);
+  background-color: var(--color-gray-200);
+  animation: pulse 1.5s ease-in-out infinite;
+  height: var(--space-10);
+}
+
+/* Button styles specific to sidebar */
+.button--full {
+  width: 100%;
+}
+
+.button--danger {
+  background-color: var(--color-error);
+  color: var(--color-white);
+}
+
+.button--danger:hover {
+  background-color: var(--color-error-hover, #ff5376);
+}
+
+.button__icon {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+/* Fixed sidebar on desktop */
+@media (min-width: 1024px) {
   .sidebar {
-    position: fixed; /* make it fixed on desktop */
-    left: 1rem;
-    top: 1rem;
-    width: 200px;
-    height: calc(100vh - 2rem);
+    position: fixed;
+    left: var(--space-4);
+    top: var(--space-4);
+    width: 240px;
+    height: calc(100vh - var(--space-8));
     overflow: auto;
     z-index: 50;
   }
-  /* when sidebar is fixed, add spacing to main grid so content doesn't go under it */
+
+  /* Adjust main content to not overlap with sidebar */
   .appShell main {
-    margin-left: 220px; /* width + gap */
+    margin-left: 260px;
   }
 }
-
-/* search input */
-.sidebar input{background:transparent;border:none;padding:6px 0;color:var(--muted)}
-

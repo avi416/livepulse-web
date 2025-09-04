@@ -1,10 +1,48 @@
-/* Small helpers for vertical feed */
-.feedCenter { display: flex; justify-content: center; }
+/* LivePulse dark theme helpers */
+.feed-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
 
-/* ensure video items snap nicely */
-.feedContainer { scroll-snap-type: y mandatory; }
+/* Dark theme accent colors */
+:root {
+  --accent-red: #ff2c55;
+  --accent-red-hover: #ff4d6d;
+  --dark-bg: #000000;
+  --dark-card-bg: #121212;
+  --dark-elevated: #1a1a1a;
+  --dark-border: #333333;
+  --dark-text-primary: #ffffff;
+  --dark-text-secondary: #aaaaaa;
+}
 
-/* action rail overlay for md and below */
+/* Dark theme button styles */
+.dark-button {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--dark-text-primary);
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.dark-button:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.dark-button--primary {
+  background-color: var(--accent-red);
+}
+
+.dark-button--primary:hover {
+  background-color: var(--accent-red-hover);
+}
+
+/* Mobile optimizations */
 @media (max-width: 768px) {
-  .actionOverlay { position: absolute; right: 12px; bottom: 80px; display:flex; flex-direction:column; gap:12px; }
+  .feed-container {
+    padding: 0 8px;
+  }
 }

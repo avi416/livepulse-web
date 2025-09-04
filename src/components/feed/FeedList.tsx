@@ -11,7 +11,7 @@ export default function FeedList({ filterFollowed = false }: { filterFollowed?: 
   const { containerRef, activeIndex: _activeIndex, next, prev } = useFeedSnap();
 
   // keyboard shortcuts: arrows to navigate, M to mute (noop here)
-  useKeyboardShortcuts({ onDown: next, onUp: prev, onMuteToggle: () => {} });
+  useKeyboardShortcuts({ onDown: next, onUp: prev, onMuteToggle: () => { } });
 
   const filtered: Live[] = filterFollowed ? items.filter((l: Live) => !!l.isFollowed) : items;
 
@@ -27,16 +27,12 @@ export default function FeedList({ filterFollowed = false }: { filterFollowed?: 
   }, [containerRef, loadMore, hasMore]);
 
   return (
-    <div ref={containerRef} className="feedContainer h-[calc(100vh-4rem)] snap-y snap-mandatory overflow-auto" aria-label="feed">
+    <div ref={containerRef} className="feed feed--vertical" aria-label="feed">
       {filtered.map((l: Live) => (
-        <div key={l.id} className="snap-start h-full flex items-center justify-center">
-          <div className="w-full flex items-center justify-center">
-            <div className="max-w-[600px] w-full px-2">
-              <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
-                <div className="relative mx-auto aspect-[9/16] w-full max-w-[600px] rounded-2xl overflow-hidden shadow-lg bg-black">
-                  <LiveCard live={l} />
-                </div>
-              </div>
+        <div key={l.id} className="feed__item">
+          <div className="feed__item-container">
+            <div className="feed__item-content">
+              <LiveCard live={l} />
             </div>
           </div>
         </div>
