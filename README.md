@@ -87,3 +87,20 @@ VITE_TURN_CREDENTIAL=turnPass
 Notes:
 - Signaling collections live under `liveStreams/{id}/sdp/{offer|answer}` and ICE in `candidates_broadcaster`/`candidates_viewers`.
 - The app automatically handles ICE restarts and renegotiation.
+
+### WebRTC env defaults (mobile-friendly)
+
+The project ships with a `.env` that enables safer mobile playback/connectivity by default:
+
+- `VITE_PREFER_H264=true` – prefers H264 for the video transceiver (better iOS/Android compatibility).
+- `VITE_FORCE_RELAY_FOR_VIEWER=true` and `VITE_FORCE_RELAY_FOR_BROADCASTER=true` – prefer TURN relay for both roles to avoid mobile↔mobile P2P failures.
+
+If you force relay, configure TURN credentials:
+
+```
+VITE_TURN_URL=turn:your-turn.example.com:3478
+VITE_TURN_USERNAME=your-user
+VITE_TURN_CREDENTIAL=your-pass
+```
+
+Without a valid TURN, forcing relay will fall back to default policy with a warning in logs.
